@@ -1,6 +1,6 @@
 # Start here
 
-Limen is a browser sandbox for portals and physics. You place linked portals, build with blocks, spawn objects, and watch real physics carry them through. It is a working name.
+Limen is a browser sandbox for portals and physics. You place linked portals, build with blocks, spawn objects, and watch real physics carry them through.
 
 The app is built in steps. Use one fresh Claude Code session per step, opened in `~/limen`.
 
@@ -13,9 +13,4 @@ Other docs:
 - `docs/research.md` covers the findings: how the games did portals, open-source projects, the physics and render choice, and performance.
 - `docs/prompts/` holds the steps, `01` to `08`.
 
-Decisions still yours:
-
-- the name (`Limen` / `limen.anxchywl.dev`)
-- the licence (MIT recommended)
-- hosting (GitHub Pages recommended)
-- build setup: no build step (recommended) or Vite
+Decided on 2026-11-01: the name Limen (`anxchywl/Limen`, `limen.anxchywl.dev`), the MIT licence, GitHub Pages hosting, and no build step.

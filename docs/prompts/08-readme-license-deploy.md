@@ -21,10 +21,10 @@ You are finishing Limen in `~/limen`. First read `docs/prompts/00-overview.md` a
    - **License.**
 
    One screenshot or GIF from a gallery scene in `docs/media/`. No marketing tone and no emoji.
-2. **`LICENSE`:** MIT, "Copyright (c) 2026 anxchywl". Do this only if the user confirmed MIT; otherwise ask the user once and wait.
+2. **`LICENSE`:** MIT, "Copyright (c) 2026 anxchywl" (confirmed by the user).
 3. **`THIRD_PARTY_LICENSES.txt`:** the three.js MIT licence and the Rapier Apache-2.0 licence, with their copyright lines, copied from the vendored packages. Also any code adapted from three.js examples (the oblique projection from `Reflector.js`). Ianua is the user's own MIT code; credit it in a comment, no notice needed.
 4. **Deploy files:**
-   - `CNAME` with `limen.anxchywl.dev` (only if the user confirmed the name and domain)
+   - `CNAME` with `limen.anxchywl.dev` (name and domain confirmed)
    - `.nojekyll`
    - `404.html` redirecting to `/` with the hash preserved
    - `<meta>` description and Open Graph image

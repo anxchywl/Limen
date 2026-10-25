@@ -79,9 +79,11 @@ Two rules govern every choice: **it must stay smooth, and it must never break.**
 
 Each prompt ends with a short note appended to `docs/progress.md`: what was done, what is left, and the measured numbers. That note is the hand-over to the next fresh session.
 
-## Decisions the user still owns
+## Decisions (confirmed by the user, 2026-11-01)
 
-- The name: `Limen` is a working name (repo `anxchywl/Limen`, site `limen.anxchywl.dev`).
-- The licence: MIT is recommended.
-- Hosting: GitHub Pages is recommended; Cloudflare Pages only if threads are ever needed.
-- No build step versus Vite: no build step is recommended, matching Ianua and Mundana.
+- Name: `Limen`; repo `anxchywl/Limen`, site `limen.anxchywl.dev`.
+- Licence: MIT, "Copyright (c) 2026 anxchywl".
+- Hosting: GitHub Pages with the custom domain (Cloudflare Pages only if threads are ever needed).
+- Build: no build step; vendored ES modules and an import map.
+
+Creating the GitHub repo and pushing still need the user's explicit OK at that time.
