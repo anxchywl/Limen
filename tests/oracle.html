@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Limen vs Ianua: portal geometry oracle</title>
+  <link rel="icon" href="data:,">
+  <style>
+    body { margin: 20px; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; background: #F7F1E9; color: #241D18; }
+    h1 { font-size: 15px; margin: 0 0 8px; }
+    #summary { padding: 8px 12px; border-radius: 4px; background: #ECE5DC; margin-bottom: 14px; white-space: pre-wrap; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    figure { margin: 0; }
+    figcaption { margin-top: 4px; opacity: 0.8; }
+    canvas { border: 1px solid #C9C1B7; display: block; width: 400px; height: 300px; image-rendering: pixelated; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "../vendor/three/three.module.js",
+        "three/addons/": "../vendor/three/addons/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <h1>Portal geometry oracle: Limen raster stencil vs Ianua ray tracer</h1>
+  <div id="summary">Running oracle comparison…</div>
+  <div class="row">
+    <figure><canvas id="limen" width="400" height="300"></canvas><figcaption>Limen (WebGL2 stencil + oblique near plane)</figcaption></figure>
+    <figure><canvas id="ianua" width="400" height="300"></canvas><figcaption>Ianua oracle (ray tracer, flat semantic colours)</figcaption></figure>
+    <figure><canvas id="diff" width="400" height="300"></canvas><figcaption>Silhouette check (green = match, grey = masked style, magenta = mismatch)</figcaption></figure>
+  </div>
+  <script type="module">
+    import {frame} from '../src/core/portal.js';
+    import {qaxis, qrot} from '../src/core/quat.js';
+    import {addBlock, addBody, addPortalPair, createScene} from '../src/core/scene.js';
+    import {teleportMaps} from '../src/core/interp.js';
+    import {frameLength} from '../src/core/frame.js';
+    import {PAPER, ROOM, hex} from '../src/render/palette.js';
+    import {createRenderer as createLimenRenderer} from '../src/render/renderer.js';
+    import {createStubSim} from '../src/app/stubsim.js';
+    import {createRenderer as createIanuaRenderer} from './vendor-ianua/renderer.js';
+
+    const W = 400, H = 300;
+    const PORTAL_HEX = '#3E7C8F';
+    const BOX_SPECS = [
+      {pos: [-2.4, 0.55, 1.1], size: [1.1, 1.1, 1.1], quat: qaxis([0, 1, 0], 0.35), color: '#7A3EB8'},
+      {pos: [-0.9, 0.45, -2.6], size: [0.9, 0.9, 0.9], quat: qaxis([0, 1, 0], -0.45), color: '#E85CA8'},
+      {pos: [1.2, 0.8, -0.4], size: [0.8, 1.6, 0.8], quat: qaxis([0, 1, 0], 0.2), color: '#18B5A8'},
+    ];
+
+    // 1. Build the shared scene document: one 12x6x12 open-topped room, one right-angle portal pair, three boxes
+    const doc = createScene({
+      camera: {pos: [3.2, 2.8, 3.6], target: [-2.2, 1.3, -2.4], fov: 55},
+    });
+    const R = 6, T = 0.02, RH = 6;
+    const floor = addBlock(doc, {min: [-R, -T, -R], max: [R, 0, R]});
+    const wx0 = addBlock(doc, {min: [-R - T, 0, -R], max: [-R, RH, R]});
+    addBlock(doc, {min: [R, 0, -R], max: [R + T, RH, R]});
+    const wz0 = addBlock(doc, {min: [-R, 0, -R - T], max: [R, RH, -R]});
+    addBlock(doc, {min: [-R, 0, R], max: [R, RH, R + T]});
+    addPortalPair(doc,
+      {block: wz0.id, face: '+z', c: [-1.2, 1.6, -R + 1e-3], n: [0, 0, 1], v: [0, 1, 0], a: 0.9, b: 1.25},
+      {block: wx0.id, face: '+x', c: [-R + 1e-3, 1.6, 1.2], n: [1, 0, 0], v: [0, 1, 0], a: 0.9, b: 1.25},
+      PORTAL_HEX);
+    for (const b of BOX_SPECS) addBody(doc, {shape: 'box', ...b});
+
+    // 2. Render with Limen's raster portal path (with no stub slider step: static initial poses from doc)
+    const limenCanvas = document.querySelector('#limen');
+    const limen = createLimenRenderer(limenCanvas, doc, {
+      antialias: false, pixelRatio: 1, preserveDrawingBuffer: true, shadows: false,
+      budget: {maxDepth: 6, maxViews: 32, minArea: 0.0005},
+    });
+    limen.renderer.setSize(W, H, false);
+    limen.camera.aspect = W / H;
+    limen.camera.updateProjectionMatrix();
+    limen.camera.updateMatrixWorld();
+
+    // write exact static poses from doc.bodies (avoid stubsim's floor-portal slider moving box 0)
+    const sim = createStubSim({...doc, portals: []});
+    const buf = new Float32Array(frameLength(sim.slots));
+    sim.write(buf);
+    limen.draw(buf, buf, 0, teleportMaps(doc.portals));
+
+    // 3. Render the identical scene & matched camera with Ianua's ray tracer
+    const ianuaCanvas = document.querySelector('#ianua');
+    const ianua = createIanuaRenderer(ianuaCanvas);
+    const me = limen.camera.matrixWorld.elements;
+    const ianuaCam = {
+      pos: [me[12], me[13], me[14]],
+      right: [me[0], me[1], me[2]],
+      up: [me[4], me[5], me[6]],
+      back: [me[8], me[9], me[10]],
+      fov: doc.camera.fov,
+    };
+    const p0 = frame(doc.portals[0]), p1 = frame(doc.portals[1]);
+    const baseIanuaScene = {
+      room: {
+        min: [-R, 0, -R], max: [R, RH, R],
+        faces: ['-x', '+x', '-y', '-z', '+z'],
+        floor: ROOM['+y'],
+        walls: {'-x': ROOM['+x'], '+x': ROOM['-x'], '-y': ROOM['+y'], '-z': ROOM['+z'], '+z': ROOM['-z']},
+      },
+      portals: [
+        {...p0, link: 1, color: PORTAL_HEX},
+        {...p1, link: 0, color: PORTAL_HEX},
+      ],
+      statics: BOX_SPECS.map((b) => ({
+        c: b.pos, h: b.size.map((s) => s / 2),
+        axes: [qrot(b.quat, [1, 0, 0]), qrot(b.quat, [0, 1, 0]), qrot(b.quat, [0, 0, 1])],
+        color: b.color, mark: 'none',
+      })),
+      bodies: [],
+    };
+
+    const readPixels = (gl) => {
+      const out = new Uint8Array(W * H * 4);
+      gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, out);
+      return out;
+    };
+
+    // Pass A on Ianua: rim + line bands enabled solely to locate the 6 cm portal rim collar & edge bands
+    ianua.render({
+      ...baseIanuaScene,
+      look: {
+        flat: 1, tint: 0, passFade: 1, depth: 6, wallsShown: 1,
+        rim: 0.075, rimBand: 0.01, preciseRims: true, background: PAPER.background, deep: PORTAL_HEX,
+      },
+    }, ianuaCam, {samples: 1, lineScale: 1.4});
+    const ianuaStyledPx = readPixels(ianua.gl);
+
+    // Pass B on Ianua (displayed): pure unstyled flat semantic colours, zero rim width, zero ink lines
+    ianua.render({
+      ...baseIanuaScene,
+      look: {
+        flat: 1, tint: 0, passFade: 1, depth: 6, wallsShown: 1,
+        rim: 0, rimBand: 0, preciseRims: false, background: PAPER.background, deep: PORTAL_HEX,
+      },
+    }, ianuaCam, {samples: 1, lineScale: 0});
+    const ianuaPurePx = readPixels(ianua.gl);
+    const limenPx = readPixels(limen.renderer.getContext());
+
+    // 4. Semantic surface palette: classify each non-masked pixel to its geometric surface
+    const LABELS = [
+      {name: 'sky', rgb: hex(PAPER.background)},
+      {name: 'floor', rgb: hex(ROOM['+y'])},
+      {name: 'wall+x', rgb: hex(ROOM['+x'])},
+      {name: 'wall-x', rgb: hex(ROOM['-x'])},
+      {name: 'wall+z', rgb: hex(ROOM['+z'])},
+      {name: 'wall-z', rgb: hex(ROOM['-z'])},
+      {name: 'box0', rgb: hex(BOX_SPECS[0].color)},
+      {name: 'box1', rgb: hex(BOX_SPECS[1].color)},
+      {name: 'box2', rgb: hex(BOX_SPECS[2].color)},
+      {name: 'terminal', rgb: hex(PORTAL_HEX)},
+    ];
+
+    // Normalized-hue + brightness distance tolerates Limen's smooth Lambert shading + 10% per-pass portal tint
+    function classify(r, g, b, exactOnly = false) {
+      let best = 0, bestD = Infinity;
+      const sum = r + g + b + 1e-6;
+      const nr = r / sum, ng = g / sum, nb = b / sum;
+      for (let i = 0; i < LABELS.length; i++) {
+        const [lr, lg, lb] = LABELS[i].rgb;
+        let d;
+        if (exactOnly) {
+          d = (r - lr) ** 2 + (g - lg) ** 2 + (b - lb) ** 2;
+        } else {
+          const lsum = lr + lg + lb + 1e-6;
+          const dc = (nr - lr / lsum) ** 2 + (ng - lg / lsum) ** 2 + (nb - lb / lsum) ** 2;
+          const db = ((r - lr) ** 2 + (g - lg) ** 2 + (b - lb) ** 2) * 0.08;
+          d = dc + db;
+        }
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      return best;
+    }
+
+    const diffCanvas = document.querySelector('#diff');
+    const ctx = diffCanvas.getContext('2d');
+    const diffImg = ctx.createImageData(W, H);
+    let masked = 0, differing = 0, compared = 0;
+
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const si = ((H - 1 - y) * W + x) * 4; // WebGL readPixels is bottom-up; canvas 2D is top-down
+        const di = (y * W + x) * 4;
+        const lr = limenPx[si] / 255, lg = limenPx[si + 1] / 255, lb = limenPx[si + 2] / 255;
+        const ir = ianuaPurePx[si] / 255, ig = ianuaPurePx[si + 1] / 255, ib = ianuaPurePx[si + 2] / 255;
+        const sr = ianuaStyledPx[si] / 255, sg = ianuaStyledPx[si + 1] / 255, sb = ianuaStyledPx[si + 2] / 255;
+
+        // Style mask: Limen's dark ink lines, or the 6 cm portal rim / edge band where Ianua's styled & pure passes differ
+        const isInk = Math.max(lr, lg, lb) < 0.42;
+        const isRimOrEdgeBand = Math.abs(sr - ir) + Math.abs(sg - ig) + Math.abs(sb - ib) > 0.03;
+        if (isInk || isRimOrEdgeBand) {
+          masked++;
+          diffImg.data.set([185, 178, 170, 255], di);
+          continue;
+        }
+
+        compared++;
+        const cLimen = classify(lr, lg, lb, false);
+        const cIanua = classify(ir, ig, ib, true);
+        if (cLimen === cIanua) {
+          diffImg.data.set([120, 182, 132, 255], di);
+        } else {
+          differing++;
+          diffImg.data.set([230, 35, 145, 255], di);
+        }
+      }
+    }
+    ctx.putImageData(diffImg, 0, 0);
+
+    const total = W * H;
+    const diffPct = (differing / compared) * 100;
+    const diffOfTotalPct = (differing / total) * 100;
+    const maskedPct = (masked / total) * 100;
+    const pass = diffPct < 1.0;
+
+    window.oracleResult = {
+      pass,
+      totalPixels: total,
+      comparedPixels: compared,
+      maskedStylePixels: masked,
+      differingPixels: differing,
+      diffPercent: Number(diffPct.toFixed(4)),
+      diffOfTotalPercent: Number(diffOfTotalPct.toFixed(4)),
+      maskedPercent: Number(maskedPct.toFixed(2)),
+      viewsDrawn: limen.stats.views,
+      maxDepthReached: limen.stats.maxDepthReached,
+    };
+
+    document.querySelector('#summary').textContent =
+      `${pass ? 'PASS' : 'FAIL'} — differing silhouette pixels: ${differing} / ${compared} compared ` +
+      `(${diffPct.toFixed(3)}%, ${diffOfTotalPct.toFixed(3)}% of all ${total} px; < 1% required)\n` +
+      `Masked style pixels (ink outlines + 6 cm portal rim band): ${masked} (${maskedPct.toFixed(1)}%) · ` +
+      `Limen portal views drawn: ${limen.stats.views} (max depth ${limen.stats.maxDepthReached})`;
+  </script>
+</body>
+</html>
