@@ -13,6 +13,7 @@ import {qaxis} from './quat.js';
 
 export const VERSION = 1;
 export const SHAPES = ['box', 'ball', 'capsule', 'plank'];
+export const PORTAL_COLOURS = ['#3E7C8F', '#C27A40', '#7E5BA6', '#5E9A4E'];
 
 export function createScene(over = {}) {
   return {
@@ -35,6 +36,23 @@ export function addBlock(scene, b) {
   if (block.kind !== 'box') block.rot ??= [0, 0, 0, 1];
   scene.blocks.push(block);
   return block;
+}
+
+export function addPortal(scene, p) {
+  const portal = {
+    id: newId(scene, 'p'), pair: null, block: null, face: '+z',
+    c: [0, 1, 0], n: [0, 0, 1], v: [0, 1, 0], a: 0.7, b: 1.0,
+    color: PORTAL_COLOURS[0], ...p,
+  };
+  scene.portals.push(portal);
+  return portal;
+}
+
+export function addPortalPair(scene, a, b, color = PORTAL_COLOURS[Math.floor(scene.portals.length / 2) % PORTAL_COLOURS.length]) {
+  const pa = addPortal(scene, {color, ...a});
+  const pb = addPortal(scene, {color, ...b, pair: pa.id});
+  pa.pair = pb.id;
+  return [pa, pb];
 }
 
 export function addBody(scene, b) {
@@ -71,20 +89,31 @@ export function randomBody(r, shape, over = {}) {
   };
 }
 
-// the built-in scene: an open-topped 12 x 6 x 12 m room of blocks, a few blocks inside, 40 bodies in the air
+// the built-in scene: an open-topped 12 x 6 x 12 m room of blocks, two portal pairs, 40 bodies
 export function defaultScene() {
   const s = createScene();
   const W = 6, T = 0.5, H = 6;
-  addBlock(s, {min: [-W - T, -T, -W - T], max: [W + T, 0, W + T]});   // floor
-  addBlock(s, {min: [-W - T, 0, -W - T], max: [-W, H, W + T]});       // -x wall
-  addBlock(s, {min: [W, 0, -W - T], max: [W + T, H, W + T]});         // +x wall
-  addBlock(s, {min: [-W, 0, -W - T], max: [W, H, -W]});               // -z wall
-  addBlock(s, {min: [-W, 0, W], max: [W, H, W + T]});                 // +z wall
-  addBlock(s, {min: [-6, 0, -6], max: [-3, 1.5, -3]});                // corner platform
-  addBlock(s, {min: [2, 0, -1], max: [4.5, 0.75, 2.5]});              // low step
+  const floor = addBlock(s, {min: [-W - T, -T, -W - T], max: [W + T, 0, W + T]});   // floor
+  const wx0 = addBlock(s, {min: [-W - T, 0, -W - T], max: [-W, H, W + T]});         // -x wall
+  addBlock(s, {min: [W, 0, -W - T], max: [W + T, H, W + T]});                       // +x wall
+  const wz0 = addBlock(s, {min: [-W, 0, -W - T], max: [W, H, -W]});                 // -z wall
+  addBlock(s, {min: [-W, 0, W], max: [W, H, W + T]});                               // +z wall
+  addBlock(s, {min: [-6, 0, -6], max: [-3, 1.5, -3]});                              // corner platform
+  addBlock(s, {min: [2, 0, -1], max: [4.5, 0.75, 2.5]});                            // low step
   addBlock(s, {kind: 'ramp', pos: [-1.5, 0.5, 3.5], size: [3, 1, 2]});
   addBlock(s, {kind: 'pillar', pos: [3.5, 1.5, -4], size: [0.8, 3, 0.8], rot: qaxis([0, 1, 0], Math.PI / 6)});
+  // pair 1 (blue): floor <-> -x wall, aligned at 45 degrees so each opening can see its partner recursively
+  addPortalPair(s,
+    {block: floor.id, face: '+y', c: [-3.8, 0, -0.8], n: [0, 1, 0], v: [-1, 0, 0], a: 0.7, b: 1.0},
+    {block: wx0.id, face: '+x', c: [-6, 2.2, -0.8], n: [1, 0, 0], v: [0, 1, 0], a: 0.7, b: 1.0},
+    PORTAL_COLOURS[0]);
+  // pair 2 (orange): -z wall <-> -x wall at right angles, both upright
+  addPortalPair(s,
+    {block: wz0.id, face: '+z', c: [-0.5, 1.6, -6], n: [0, 0, 1], v: [0, 1, 0], a: 0.7, b: 1.0},
+    {block: wx0.id, face: '+x', c: [-6, 1.6, 1.5], n: [1, 0, 0], v: [0, 1, 0], a: 0.7, b: 1.0},
+    PORTAL_COLOURS[1]);
   const r = rng(7);
-  for (let i = 0; i < 40; i++) addBody(s, randomBody(r, SHAPES[i % SHAPES.length]));
+  addBody(s, {shape: 'box', size: [0.55, 0.55, 0.55], pos: [-3.8, 0.45, -0.8], quat: qaxis([0, 1, 0], 0.4), color: '#D2432A'});
+  for (let i = 1; i < 40; i++) addBody(s, randomBody(r, SHAPES[i % SHAPES.length]));
   return s;
 }

@@ -3,8 +3,13 @@
 // planes) and settle flat. No body-to-body contact. Prompt 03 replaces it with the physics worker
 // behind the same interface: slots, write(buf), step(buf), add(body), reset().
 
-import {ALIVE, FLAGS, H_COUNT, H_STEP, H_TIME, slotOffset} from '../core/frame.js';
-import {qrot} from '../core/quat.js';
+import {apply, madd} from '../core/vec.js';
+import {frame, portalMap} from '../core/portal.js';
+import {
+  ALIVE, CLONE_POS, CLONE_QUAT, FLAGS, HAS_CLONE, H_COUNT, H_STEP, H_TIME,
+  SPARE, slotOffset, withTeleport,
+} from '../core/frame.js';
+import {qaxis, qfromR, qmul, qrot} from '../core/quat.js';
 
 const DT = 1 / 60;
 
@@ -51,9 +56,25 @@ export function createStubSim(scene) {
     return i;
   }
 
+  let slider = null;
+
+  function buildSlider() {
+    slider = null;
+    if (!scene.portals?.length) return;
+    let pIdx = scene.portals.findIndex((p) => p.n[1] > 0.5);
+    if (pIdx < 0) pIdx = 0;
+    const p = scene.portals[pIdx];
+    const qIdx = scene.portals.findIndex((x) => x.id === p.pair);
+    if (qIdx < 0) return;
+    const Pf = frame(p), Qf = frame(scene.portals[qIdx]);
+    const Mpq = portalMap(Pf, Qf);
+    slider = {pIdx, qIdx, P: Pf, Q: Qf, Mpq, qpq: qfromR(Mpq.R)};
+  }
+
   function reset() {
     n = 0; steps = 0;
     blocks = scene.blocks.map(blockPlanes);
+    buildSlider();
     scene.bodies.forEach(add);
   }
 
@@ -130,9 +151,44 @@ export function createStubSim(scene) {
     }
   }
 
+  // slide slot 0 back and forth through the floor portal and fill its clone fields via portalMap
+  function writeSlider(buf) {
+    const t = steps * DT;
+    const s = 0.45 * Math.cos(t * 1.8);
+    const sPrev = steps > 0 ? 0.45 * Math.cos((steps - 1) * DT * 1.8) : s;
+    const quatP = qmul(qaxis(slider.P.n, 0.4 + 0.3 * Math.sin(t * 0.7)), qaxis(slider.P.u, 0.25));
+    const posP = madd(slider.P.c, slider.P.n, s);
+    const posQ = apply(slider.Mpq, posP);
+    const quatQ = qmul(slider.qpq, quatP);
+    Q.set(quatP, 0);
+    axes(0);
+    const ext = support(0, slider.P.n[0], slider.P.n[1], slider.P.n[2]) + 0.01;
+    const o = slotOffset(0);
+    let flags = ALIVE, masterPos = posP, masterQuat = quatP, clonePos = null, cloneQuat = null, entryIdx = 0;
+    if (s < 0) {
+      masterPos = posQ; masterQuat = quatQ;
+      if (s > -ext) { flags |= HAS_CLONE; clonePos = posP; cloneQuat = quatP; entryIdx = slider.qIdx; }
+      if (steps > 0 && sPrev >= 0) flags = withTeleport(flags, slider.pIdx);
+    } else if (s < ext) {
+      flags |= HAS_CLONE; clonePos = posQ; cloneQuat = quatQ; entryIdx = slider.pIdx;
+      if (steps > 0 && sPrev < 0) flags = withTeleport(flags, slider.qIdx);
+    }
+    P.set(masterPos, 0); Q.set(masterQuat, 0);
+    buf.set(masterPos, o); buf.set(masterQuat, o + 3);
+    buf[o + FLAGS] = flags;
+    if (clonePos) {
+      buf.set(clonePos, o + CLONE_POS); buf.set(cloneQuat, o + CLONE_QUAT);
+      buf[o + SPARE] = entryIdx;
+    } else {
+      buf.fill(0, o + CLONE_POS, o + SPARE + 1);
+    }
+  }
+
   function write(buf) {
     buf[H_STEP] = steps; buf[H_TIME] = steps * DT; buf[H_COUNT] = n;
-    for (let i = 0; i < n; i++) {
+    const start = slider && n > 0 ? 1 : 0;
+    if (start === 1) writeSlider(buf);
+    for (let i = start; i < n; i++) {
       const o = slotOffset(i);
       buf[o] = P[i * 3]; buf[o + 1] = P[i * 3 + 1]; buf[o + 2] = P[i * 3 + 2];
       buf[o + 3] = Q[i * 4]; buf[o + 4] = Q[i * 4 + 1]; buf[o + 5] = Q[i * 4 + 2]; buf[o + 6] = Q[i * 4 + 3];
@@ -141,7 +197,8 @@ export function createStubSim(scene) {
   }
 
   function step(buf) {
-    for (let i = 0; i < n; i++) stepBody(i);
+    const start = slider && n > 0 ? 1 : 0;
+    for (let i = start; i < n; i++) stepBody(i);
     steps++;
     write(buf);
   }

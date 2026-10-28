@@ -52,13 +52,18 @@ assert.equal(crossing(P, P, [0, 0, 2], [0, 0, 0.5]), null);
 const P1 = frame({...P, c: [0, 0, 2]});
 assert.ok(crossing(P, P1, [0, 0, 1], [0, 0, 1]) !== null);
 
-// the default scene document is plain JSON, a 12 x 6 x 12 room with 40 bodies and no portals
+// the default scene document is plain JSON, a 12 x 6 x 12 room with two portal pairs and 40 bodies
 const s = defaultScene();
 assert.deepEqual(JSON.parse(JSON.stringify(s)), s);
 assert.equal(s.version, 1);
 assert.equal(s.bodies.length, 40);
-assert.equal(s.portals.length, 0);
-assert.equal(new Set([...s.blocks, ...s.bodies].map((x) => x.id)).size, s.blocks.length + s.bodies.length);
+assert.equal(s.portals.length, 4);
+for (const p of s.portals) {
+  const q = s.portals.find((x) => x.id === p.pair);
+  assert.ok(q && q.pair === p.id && p.a === 0.7 && p.b === 1.0);
+}
+assert.equal(new Set([...s.blocks, ...s.portals, ...s.bodies].map((x) => x.id)).size,
+  s.blocks.length + s.portals.length + s.bodies.length);
 assert.deepEqual(JSON.stringify(defaultScene()), JSON.stringify(s));
 
 console.log('core checks passed: inverse maps, doorway, map quaternion, crossing hits and misses, default scene');
