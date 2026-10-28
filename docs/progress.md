@@ -88,3 +88,52 @@ Main-thread ms is `performance.now()` around `loop.tick`: sim steps, blending, m
 - **The stub's interface.** The loop calls `sim.step(curr)` synchronously and swaps buffers. A worker posts frames asynchronously, so the bridge should hand the loop the newest two frames it has received, and keep the interface shape: `slots`, `write`, `step`, `add`, `reset`.
 - **Escaping bodies.** Bodies can leave the open-topped room over the walls, so add a kill plane or a respawn.
 - **Debug keys.** `B` spawns 2,000 stub bodies with weighted shapes. `R` resets the sim. `window.limen` exposes `doc`, `view`, `sim`, `loop`, `spawn`, `reset` and `recordAlpha(ms)`.
+
+## 02: portal rendering and recursion (2026-11-01)
+
+**Done.** All acceptance checks pass on `http://localhost:5180` and in headless Node:
+- two `0.7 × 1.0` m portal pairs in `defaultScene()`: blue floor ↔ `-x` wall (aligned at 45° so each opening sees its partner recursively) and orange `-z` wall ↔ `-x` wall at right angles
+- ellipse rims in pair colours with constant-pixel ink borders, flat ellipse openings for stencil marking/depth restore, and inward-facing `-0.20` m pockets when the main camera comes within `near × 3`
+- breadth-first view planner with screen-space scissor rects, back-face and `< 0.2%` area culling, view/depth budgets (`6 / 32` desktop, `3 / 12` when `(pointer: coarse)` matches), per-pass portal tint (`uPassTint`), darkened pair-colour terminal fills, and single shadow-map pass per frame
+- Lengyel oblique near-plane projection (`src/render/oblique.js`), unit-tested in `tests/oblique.mjs`
+- clipped master + clone instances driven by `HAS_CLONE` and `SPARE` (entry portal index), exercised by a sliding crimson box oscillating through the floor portal in `stubsim.js`
+- `P` debug key and `window.limen.flyThrough(idx)` flying straight through all four portals with zero wall flash
+- geometry oracle (`tests/oracle.html`) against Ianua's ray tracer: `1 / 115,515` differing silhouette pixels (`0.0009%`, `< 1%` threshold)
+
+`node tests/core.mjs`, `node tests/interp.mjs` and `node tests/oblique.mjs` pass.
+
+### File map
+
+| Path | What |
+|---|---|
+| `src/render/oblique.js` | `applyObliqueNearPlane(camera, exitCenter, exitNormal, clipBias)`: Lengyel oblique near-plane modifier adapted from three.js `Reflector.js`, zero-allocation |
+| `src/render/portals.js` | `createPortals(doc)` and `defaultViewBudget()`: rim/opening/pocket geometries, allocation-free BFS view planner with Sutherland–Hodgman near-plane scissor projection, stencil mark/clear/restore and terminal fills |
+| `src/render/renderer.js` | multi-pass stencil recursion (`INCR` → tinted sky/depth clear → virtual render → opening depth restore & `DECR`), single shadow update per frame, `view.stats`, `view.budget`, `view.rebuildPortals()`, optional `measureFinish` timing |
+| `src/render/ink.js` | `uPassTint` uniform in `FRAG_INK` and default `stencilWrite: true, stencilFunc: EqualStencilFunc` on `inkMaterial` |
+| `src/render/level.js` | exposes `material`, `frustumCulled = false`, and `polygonOffset (1, 2)` so coplanar portal openings at exact `z = 0` beat host walls without pulling ahead of straddling bodies |
+| `src/render/instances.js` | `setPortals(portals)`, `materials`, and clipped clone instances appended to each shape's `InstancedMesh` from `HAS_CLONE` + `SPARE`, with seamless mid-straddle teleport pose mapping |
+| `src/core/scene.js` | `PORTAL_COLOURS`, `addPortal`, `addPortalPair`, and the two default portal pairs + floor-portal debug box in `defaultScene()` |
+| `src/app/stubsim.js` | deterministic slot-0 slider through the floor portal writing `HAS_CLONE`, `CLONE_POS`, `CLONE_QUAT`, `SPARE` and `withTeleport` via `portalMap` |
+| `src/main.js` | `P` debug key + `flyThrough(idx)`, portal-aware `keepInside()` and orbit crossing, `views/budget d/maxD` in `#debug` |
+| `tests/oblique.mjs` | unit tests for `applyObliqueNearPlane` on axis-aligned and `portalMap`-transformed virtual cameras |
+| `tests/oracle.html`, `tests/vendor-ianua/{renderer,palette}.js` | matched 1-room, 1-pair, 3-box silhouette comparison against a read-only copy of Ianua's ray tracer |
+| `tests/core.mjs` | updated default-scene check for the two portal pairs and unique IDs across blocks, portals and bodies |
+
+### Measured (Apple Silicon Mac, Chrome Headless Metal WebGL2, DPR 2, 2560 × 1800 buffer)
+
+| Case | Main thread per frame | GPU per frame | Views / depth / draws |
+|---|---|---|---|
+| 40 bodies, default view | 0.39 ms avg | 6.47 ms | 4 views, d1/6, 60 draws |
+| 300 bodies, depth-6 corridor, real rAF (90 frames) | avg 0.77, p50 0.60, p95 2.00, max 2.20 ms (≤ 4 ms budget) | 4.94 ms timer query (≤ 10 ms budget) | 7 views, d6/6, 1 terminal, 92 draws |
+| 300 bodies, depth-6 corridor, 240 synthetic ticks | avg 0.29, p95 0.60 ms | n/a | 7 views, d6/6, 92 draws |
+| Phone emulation (`390 × 844`, DPR 2, `pointer: coarse`) | 0 errors, 0 404s | `gl.getError() = 0` | budget `12`, `d3/3`, 3 views, 1 terminal, 48 draws |
+
+- **Oracle (`tests/oracle.html`):** `1` differing pixel out of `115,515` compared pixels (`0.0009%`; `3.74%` masked ink/rim style band).
+- **Camera crossing (`flyThrough(0..3)`):** 180-frame flights at 120 Hz across all four portals (`p10`–`p13`) had max centre-patch frame-to-frame deltas of `6.0` to `15.3 / 255` through the `±0.13 m` near-plane window, with zero wall flashes or black frames.
+
+### For prompt 03 (and prompt 04)
+
+- **Frame buffer clone contract.** Keep `src/core/frame.js` as the single layout definition and re-export it from `src/physics/protocol.js`. When `HAS_CLONE` is set on slot `i` (prompt 04 `transit.js`), write the clone world pose to `CLONE_POS` / `CLONE_QUAT` and write the **entry portal index** (`0 .. doc.portals.length - 1`) to `slot[SPARE]` (`offset 15`). `instances.js` already clips the master against `entry`, clips and scales the clone against `exit`, and maps the clone cleanly across mid-straddle teleport steps.
+- **Replacing `stubsim.js`.** Prompt 03 replaces `createStubSim` with the Rapier worker bridge behind `slots`, `steps`, `write`, `step`, `add`, `reset`. Once Rapier drives slot 0 in prompt 03, bodies will simply fall onto the solid floor until prompt 04 adds portal sensors and transit clones.
+- **Rebuilding portals.** Whenever `doc.portals` changes, call `view.rebuildPortals()` and refresh `maps = teleportMaps(doc.portals)`.
+- **Debug handles.** Keys are `B` (spawn 2,000), `R` (reset), `P` (fly through next portal). `window.limen` exposes `doc`, `view`, `sim`, `loop`, `controls`, `spawn`, `reset`, `flyThrough(idx)` and `recordAlpha(ms)`.
