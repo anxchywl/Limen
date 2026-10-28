@@ -75,15 +75,19 @@ export function levelGeometry(blocks) {
 }
 
 export function createLevel(scene) {
-  const material = inkMaterial({mode: 'faces', vertexColors: true, ink: PAPER.ink, width: 0.7});
+  const material = inkMaterial({
+    mode: 'faces', vertexColors: true, ink: PAPER.ink, width: 0.7,
+    polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 2,
+  });
   const mesh = new THREE.Mesh(levelGeometry(scene.blocks), material);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
+  mesh.frustumCulled = false;
   mesh.name = 'level';
   const group = new THREE.Group();
   group.add(mesh);
   return {
-    group,
+    group, material,
     rebuild(blocks) { mesh.geometry.dispose(); mesh.geometry = levelGeometry(blocks); },
     dispose() { mesh.geometry.dispose(); material.dispose(); },
   };

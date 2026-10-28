@@ -68,6 +68,7 @@ const VERT_MAIN = /* glsl */`
 const FRAG_PARS = /* glsl */`
 uniform vec3 uInk;
 uniform float uInkWidth;
+uniform vec3 uPassTint;
 #ifdef INK_FACES
 varying vec4 vInkEdge;
 #endif
@@ -100,7 +101,7 @@ const FRAG_INK = /* glsl */`
   ink = max(ink, inkLine(abs(vInkLocal.y) / max(fwidth(vInkLocal.y), 1e-6)));
   ink = max(ink, inkLine(abs(vInkLocal.x) / max(fwidth(vInkLocal.x), 1e-6)));
 #endif
-  gl_FragColor.rgb = mix(gl_FragColor.rgb, uInk, ink);
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, uInk, ink) * uPassTint;
 }
 `;
 
@@ -117,11 +118,17 @@ function patch(shader, defines) {
 
 // mode 'faces' | 'round'; capsule and clip are flags. Extra GLSL defines are set per material.
 export function inkMaterial({mode = 'faces', capsule = false, clip = false, ink, width = 0.6, ...params} = {}) {
-  const m = new THREE.MeshLambertMaterial(params);
+  const m = new THREE.MeshLambertMaterial({
+    stencilWrite: true, stencilFunc: THREE.EqualStencilFunc, stencilRef: 0, ...params,
+  });
   const defines = {[mode === 'round' ? 'INK_ROUND' : 'INK_FACES']: ''};
   if (capsule) defines.INK_CAPSULE = '';
   if (clip) defines.INK_CLIP = '';
-  const uniforms = {uInk: {value: new THREE.Color(ink)}, uInkWidth: {value: width}};
+  const uniforms = {
+    uInk: {value: new THREE.Color(ink)},
+    uInkWidth: {value: width},
+    uPassTint: {value: new THREE.Color(1, 1, 1)},
+  };
   m.userData.ink = uniforms;
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
