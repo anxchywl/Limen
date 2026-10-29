@@ -3,13 +3,13 @@
 // planes) and settle flat. No body-to-body contact. Prompt 03 replaces it with the physics worker
 // behind the same interface: slots, write(buf), step(buf), add(body), reset().
 
-import {apply, madd} from '../core/vec.js';
-import {frame, portalMap} from '../core/portal.js';
+import {apply, madd} from '../src/core/vec.js';
+import {frame, portalMap} from '../src/core/portal.js';
 import {
   ALIVE, CLONE_POS, CLONE_QUAT, FLAGS, HAS_CLONE, H_COUNT, H_STEP, H_TIME,
   SPARE, slotOffset, withTeleport,
-} from '../core/frame.js';
-import {qaxis, qfromR, qmul, qrot} from '../core/quat.js';
+} from '../src/core/frame.js';
+import {qaxis, qfromR, qmul, qrot} from '../src/core/quat.js';
 
 const DT = 1 / 60;
 

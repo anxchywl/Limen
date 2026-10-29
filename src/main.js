@@ -1,20 +1,35 @@
-// Limen entry: builds the default scene document, the renderer, the stub sim and the frame loop,
-// and wires the orbit camera and a small debug readout.
-// Debug keys: B spawns 2,000 stub bodies, R resets the sim, P flies straight through the next portal.
+// Limen entry: builds the default scene document, the renderer, the Rapier worker bridge and the
+// frame loop, and wires the orbit camera and a small debug readout.
+// Debug keys: Space play/pause, . single-step, B spawn up to 300 bodies, R reset, N inject NaN, P fly portal.
 
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {apply, applyDir, madd, scale} from './core/vec.js';
 import {crossing, frame, inside, local, portalMap} from './core/portal.js';
-import {SHAPES, addBody, defaultScene, randomBody, rng} from './core/scene.js';
+import {SHAPES, defaultScene, newId, randomBody, rng} from './core/scene.js';
 import {teleportMaps} from './core/interp.js';
 import {createRenderer} from './render/renderer.js';
-import {createStubSim} from './app/stubsim.js';
+import {createPhysicsBridge} from './physics/bridge.js';
 import {createLoop} from './app/loop.js';
 
 const doc = defaultScene();
 const canvas = document.querySelector('#view');
 const view = createRenderer(canvas, doc);
-const sim = createStubSim(doc);
+let notice = null;
+const setNotice = (text, ms = 3000) => { notice = {text, until: performance.now() + ms}; };
+
+const sim = createPhysicsBridge(doc, {
+  autoplay: true,
+  onBodiesChanged: (bodies) => view.bodies.setBodies(bodies),
+  onEvent(ev) {
+    if (ev.type === 'removed' && (ev.reason === 'nan' || ev.reason === 'bounds')) {
+      setNotice(`removed ${ev.id} (${ev.reason})`);
+    } else if (ev.type === 'refused') {
+      setNotice(`spawn refused (${ev.reason})`);
+    } else if (ev.type === 'busy') {
+      setNotice('simulation busy', 5000);
+    }
+  },
+});
 let maps = teleportMaps(doc.portals);
 let framedPortals = doc.portals.map(frame);
 
@@ -119,46 +134,84 @@ const loop = createLoop({
 const readout = document.querySelector('#debug');
 setInterval(() => {
   const s = loop.stats, gpu = view.gpuMs, vs = view.stats;
+  const note = notice && performance.now() < notice.until ? ` · ${notice.text}` : '';
   readout.textContent = `${s.msAvg.toFixed(2)} ms (max ${s.msMax.toFixed(1)})` +
     (Number.isNaN(gpu) ? '' : ` · gpu ${gpu.toFixed(2)} ms`) +
     ` · views ${vs.views}/${vs.budget} d${vs.maxDepthReached}/${vs.maxDepth}` +
-    ` · step ${sim.steps} · ${sim.slots} bodies${view.lost ? ' · context lost' : ''}`;
+    ` · step ${sim.steps} · ${sim.count} bodies` +
+    `${sim.playing ? '' : ' · paused'}${sim.busy ? ' · simulation busy' : ''}${note}` +
+    `${view.lost ? ' · context lost' : ''}`;
 }, 250);
 
 // spawned shapes are weighted, mostly boxes and balls
 const spawnRng = rng(11);
 const pick = () => { const x = spawnRng(); return SHAPES[x < 0.45 ? 0 : x < 0.75 ? 1 : x < 0.88 ? 2 : 3]; };
-function spawn(n = 2000) {
-  for (let i = 0; i < n; i++) sim.add(addBody(doc, randomBody(spawnRng, pick())));
-  view.bodies.setBodies(doc.bodies);
+function spawn(arg) {
+  if (arg && typeof arg === 'object') {
+    const body = {
+      id: newId(doc, 'b'), shape: 'box', size: [0.5, 0.5, 0.5], pos: [0, 2, 0], quat: [0, 0, 0, 1],
+      vel: [0, 0, 0], angvel: [0, 0, 0], mass: 1, color: null, ...arg,
+    };
+    sim.spawn(body);
+    return body;
+  }
+  const n = typeof arg === 'number' ? arg : Math.max(1, 300 - sim.count);
+  const cols = 7, stepXZ = 1.35, stepY = 1.35;
+  for (let i = 0; i < n; i++) {
+    const rb = randomBody(spawnRng, pick());
+    if (n > 10) {
+      const gx = i % cols;
+      const gz = Math.floor(i / cols) % cols;
+      const gy = Math.floor(i / (cols * cols));
+      rb.pos = [
+        (gx - (cols - 1) / 2) * stepXZ + (spawnRng() - 0.5) * 0.25,
+        5.8 + gy * stepY + spawnRng() * 0.2,
+        (gz - (cols - 1) / 2) * stepXZ + (spawnRng() - 0.5) * 0.25,
+      ];
+    }
+    sim.spawn({
+      id: newId(doc, 'b'), shape: 'box', size: [0.5, 0.5, 0.5], pos: [0, 2, 0], quat: [0, 0, 0, 1],
+      vel: [0, 0, 0], angvel: [0, 0, 0], mass: 1, color: null,
+      ...rb,
+    });
+  }
+  return n;
 }
 
-function reset() {
-  sim.reset();
+function reset(opts = {play: false}) {
   simClock = 0;
   maps = teleportMaps(doc.portals);
   framedPortals = doc.portals.map(frame);
   view.rebuildPortals();
-  loop.curr.fill(0); loop.prev.fill(0);
-  sim.write(loop.curr); loop.prev.set(loop.curr);
+  sim.reset(opts);
 }
 
 addEventListener('keydown', (e) => {
   if (e.repeat || e.metaKey || e.ctrlKey) return;
+  if (e.code === 'Space' || e.key === ' ') { e.preventDefault(); sim.playing ? sim.pause() : sim.play(); }
+  if (e.key === '.') { if (!sim.playing) sim.step(1); }
   if (e.key === 'b' || e.key === 'B') spawn();
   if (e.key === 'r' || e.key === 'R') reset();
+  if (e.key === 'n' || e.key === 'N') sim.injectNaN();
   if (e.key === 'p' || e.key === 'P') flyThrough();
 });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) loop.resync(); });
 view.onRestored = () => {
   view.bodies.setPortals(doc.portals);
-  view.bodies.setBodies(doc.bodies);
+  view.bodies.setBodies(sim.bodies);
 };
 
 loop.start();
 
 window.limen = {
   doc, view, sim, loop, controls, spawn, reset, flyThrough,
+  play: () => sim.play(),
+  pause: () => sim.pause(),
+  step: (n = 1) => sim.step(n),
+  remove: (id) => sim.remove(id),
+  edit: (entity) => sim.edit(entity),
+  setSettings: (s) => sim.setSettings(s),
+  injectNaN: (id) => sim.injectNaN(id),
   // log alpha and steps for every frame over `ms`, for the smoothness check
   recordAlpha(ms = 2000) {
     rec = {log: []};

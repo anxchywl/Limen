@@ -2,17 +2,19 @@
 // Steps run at a fixed rate (60 Hz), at most maxSteps per frame, so a slow frame or a hidden tab
 // never causes a burst ("spiral of death"). Render blends the last two frames by alpha = acc / dt.
 //
-// The sim is anything with `slots` (slot count, may grow), `write(buf)` (the current state) and
-// `step(buf)` (advance one step, then write). Buffers use the layout in core/frame.js. The stub
-// (app/stubsim.js) runs on the main thread now; prompt 03 puts Rapier behind the same interface.
+// The sim is either a worker bridge with `sample(frameDt)` -> `{prev, curr, alpha, steps}` or a
+// synchronous test double with `slots`, `write(buf)` and `step(buf)`. Buffers use core/frame.js.
 
 import {frameLength} from '../core/frame.js';
 
 export function createLoop({sim, render, dt = 1 / 60, maxSteps = 4, onFrame}) {
-  let prev = new Float32Array(frameLength(sim.slots));
-  let curr = new Float32Array(frameLength(sim.slots));
-  sim.write?.(curr);
-  prev.set(curr);
+  const isAsync = typeof sim.sample === 'function';
+  let prev = isAsync ? null : new Float32Array(frameLength(sim.slots));
+  let curr = isAsync ? null : new Float32Array(frameLength(sim.slots));
+  if (!isAsync) {
+    sim.write?.(curr);
+    prev.set(curr);
+  }
   let acc = 0, last = null, raf = 0;
   const stats = {steps: 0, frameSteps: 0, alpha: 0, ms: 0, msAvg: 0, msMax: 0, frames: 0};
 
@@ -28,8 +30,19 @@ export function createLoop({sim, render, dt = 1 / 60, maxSteps = 4, onFrame}) {
   function tick(now) {
     const t0 = performance.now();
     if (last === null) last = now;
-    acc += Math.max(0, (now - last) / 1000);
+    const dtSec = Math.max(0, (now - last) / 1000);
     last = now;
+    if (isAsync) {
+      const {prev: p, curr: c, alpha, steps: n} = sim.sample(Math.min(maxSteps * dt, dtSec));
+      render(p, c, alpha);
+      const ms = performance.now() - t0;
+      stats.steps += n; stats.frameSteps = n; stats.alpha = alpha; stats.ms = ms; stats.frames++;
+      stats.msAvg += (ms - stats.msAvg) * 0.05;
+      stats.msMax = Math.max(stats.msMax * 0.995, ms);
+      onFrame?.(stats, n, alpha);
+      return;
+    }
+    acc += dtSec;
     let n = 0;
     while (acc >= dt && n < maxSteps) {
       fit();
@@ -53,7 +66,11 @@ export function createLoop({sim, render, dt = 1 / 60, maxSteps = 4, onFrame}) {
   const start = () => { if (!raf) raf = requestAnimationFrame(frame); };
   const stop = () => { cancelAnimationFrame(raf); raf = 0; last = null; };
   // after a hidden stretch, start the clock afresh rather than counting the time away
-  const resync = () => { last = null; };
+  const resync = () => { last = null; sim.resync?.(); };
 
-  return {tick, start, stop, resync, stats, dt, get prev() { return prev; }, get curr() { return curr; }};
+  return {
+    tick, start, stop, resync, stats, dt,
+    get prev() { return sim.prev ?? prev; },
+    get curr() { return sim.curr ?? curr; },
+  };
 }
