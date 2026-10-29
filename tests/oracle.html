@@ -1,17 +1,53 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <title>Limen vs Ianua: portal geometry oracle</title>
   <link rel="icon" href="data:,">
   <style>
-    body { margin: 20px; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; background: #F7F1E9; color: #241D18; }
-    h1 { font-size: 15px; margin: 0 0 8px; }
-    #summary { padding: 8px 12px; border-radius: 4px; background: #ECE5DC; margin-bottom: 14px; white-space: pre-wrap; }
-    .row { display: flex; gap: 12px; flex-wrap: wrap; }
-    figure { margin: 0; }
-    figcaption { margin-top: 4px; opacity: 0.8; }
-    canvas { border: 1px solid #C9C1B7; display: block; width: 400px; height: 300px; image-rendering: pixelated; }
+    body {
+      margin: 20px;
+      font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: #F7F1E9;
+      color: #241D18;
+    }
+
+    h1 {
+      font-size: 15px;
+      margin: 0 0 8px;
+    }
+
+    #summary {
+      padding: 8px 12px;
+      border-radius: 4px;
+      background: #ECE5DC;
+      margin-bottom: 14px;
+      white-space: pre-wrap;
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    figure {
+      margin: 0;
+    }
+
+    figcaption {
+      margin-top: 4px;
+      opacity: 0.8;
+    }
+
+    canvas {
+      border: 1px solid #C9C1B7;
+      display: block;
+      width: 400px;
+      height: 300px;
+      image-rendering: pixelated;
+    }
   </style>
   <script type="importmap">
     {
@@ -22,54 +58,61 @@
     }
   </script>
 </head>
+
 <body>
   <h1>Portal geometry oracle: Limen raster stencil vs Ianua ray tracer</h1>
   <div id="summary">Running oracle comparison…</div>
   <div class="row">
-    <figure><canvas id="limen" width="400" height="300"></canvas><figcaption>Limen (WebGL2 stencil + oblique near plane)</figcaption></figure>
-    <figure><canvas id="ianua" width="400" height="300"></canvas><figcaption>Ianua oracle (ray tracer, flat semantic colours)</figcaption></figure>
-    <figure><canvas id="diff" width="400" height="300"></canvas><figcaption>Silhouette check (green = match, grey = masked style, magenta = mismatch)</figcaption></figure>
+    <figure><canvas id="limen" width="400" height="300"></canvas>
+      <figcaption>Limen (WebGL2 stencil + oblique near plane)</figcaption>
+    </figure>
+    <figure><canvas id="ianua" width="400" height="300"></canvas>
+      <figcaption>Ianua oracle (ray tracer, flat semantic colours)</figcaption>
+    </figure>
+    <figure><canvas id="diff" width="400" height="300"></canvas>
+      <figcaption>Silhouette check (green = match, grey = masked style, magenta = mismatch)</figcaption>
+    </figure>
   </div>
   <script type="module">
-    import {frame} from '../src/core/portal.js';
-    import {qaxis, qrot} from '../src/core/quat.js';
-    import {addBlock, addBody, addPortalPair, createScene} from '../src/core/scene.js';
-    import {teleportMaps} from '../src/core/interp.js';
-    import {frameLength} from '../src/core/frame.js';
-    import {PAPER, ROOM, hex} from '../src/render/palette.js';
-    import {createRenderer as createLimenRenderer} from '../src/render/renderer.js';
-    import {createStubSim} from '../src/app/stubsim.js';
-    import {createRenderer as createIanuaRenderer} from './vendor-ianua/renderer.js';
+    import { frame } from '../src/core/portal.js';
+    import { qaxis, qrot } from '../src/core/quat.js';
+    import { addBlock, addBody, addPortalPair, createScene } from '../src/core/scene.js';
+    import { teleportMaps } from '../src/core/interp.js';
+    import { frameLength } from '../src/core/frame.js';
+    import { PAPER, ROOM, hex } from '../src/render/palette.js';
+    import { createRenderer as createLimenRenderer } from '../src/render/renderer.js';
+    import { createStubSim } from './stubsim.js';
+    import { createRenderer as createIanuaRenderer } from './vendor-ianua/renderer.js';
 
     const W = 400, H = 300;
     const PORTAL_HEX = '#3E7C8F';
     const BOX_SPECS = [
-      {pos: [-2.4, 0.55, 1.1], size: [1.1, 1.1, 1.1], quat: qaxis([0, 1, 0], 0.35), color: '#7A3EB8'},
-      {pos: [-0.9, 0.45, -2.6], size: [0.9, 0.9, 0.9], quat: qaxis([0, 1, 0], -0.45), color: '#E85CA8'},
-      {pos: [1.2, 0.8, -0.4], size: [0.8, 1.6, 0.8], quat: qaxis([0, 1, 0], 0.2), color: '#18B5A8'},
+      { pos: [-2.4, 0.55, 1.1], size: [1.1, 1.1, 1.1], quat: qaxis([0, 1, 0], 0.35), color: '#7A3EB8' },
+      { pos: [-0.9, 0.45, -2.6], size: [0.9, 0.9, 0.9], quat: qaxis([0, 1, 0], -0.45), color: '#E85CA8' },
+      { pos: [1.2, 0.8, -0.4], size: [0.8, 1.6, 0.8], quat: qaxis([0, 1, 0], 0.2), color: '#18B5A8' },
     ];
 
     // 1. Build the shared scene document: one 12x6x12 open-topped room, one right-angle portal pair, three boxes
     const doc = createScene({
-      camera: {pos: [3.2, 2.8, 3.6], target: [-2.2, 1.3, -2.4], fov: 55},
+      camera: { pos: [3.2, 2.8, 3.6], target: [-2.2, 1.3, -2.4], fov: 55 },
     });
     const R = 6, T = 0.02, RH = 6;
-    const floor = addBlock(doc, {min: [-R, -T, -R], max: [R, 0, R]});
-    const wx0 = addBlock(doc, {min: [-R - T, 0, -R], max: [-R, RH, R]});
-    addBlock(doc, {min: [R, 0, -R], max: [R + T, RH, R]});
-    const wz0 = addBlock(doc, {min: [-R, 0, -R - T], max: [R, RH, -R]});
-    addBlock(doc, {min: [-R, 0, R], max: [R, RH, R + T]});
+    const floor = addBlock(doc, { min: [-R, -T, -R], max: [R, 0, R] });
+    const wx0 = addBlock(doc, { min: [-R - T, 0, -R], max: [-R, RH, R] });
+    addBlock(doc, { min: [R, 0, -R], max: [R + T, RH, R] });
+    const wz0 = addBlock(doc, { min: [-R, 0, -R - T], max: [R, RH, -R] });
+    addBlock(doc, { min: [-R, 0, R], max: [R, RH, R + T] });
     addPortalPair(doc,
-      {block: wz0.id, face: '+z', c: [-1.2, 1.6, -R + 1e-3], n: [0, 0, 1], v: [0, 1, 0], a: 0.9, b: 1.25},
-      {block: wx0.id, face: '+x', c: [-R + 1e-3, 1.6, 1.2], n: [1, 0, 0], v: [0, 1, 0], a: 0.9, b: 1.25},
+      { block: wz0.id, face: '+z', c: [-1.2, 1.6, -R + 1e-3], n: [0, 0, 1], v: [0, 1, 0], a: 0.9, b: 1.25 },
+      { block: wx0.id, face: '+x', c: [-R + 1e-3, 1.6, 1.2], n: [1, 0, 0], v: [0, 1, 0], a: 0.9, b: 1.25 },
       PORTAL_HEX);
-    for (const b of BOX_SPECS) addBody(doc, {shape: 'box', ...b});
+    for (const b of BOX_SPECS) addBody(doc, { shape: 'box', ...b });
 
     // 2. Render with Limen's raster portal path (with no stub slider step: static initial poses from doc)
     const limenCanvas = document.querySelector('#limen');
     const limen = createLimenRenderer(limenCanvas, doc, {
       antialias: false, pixelRatio: 1, preserveDrawingBuffer: true, shadows: false,
-      budget: {maxDepth: 6, maxViews: 32, minArea: 0.0005},
+      budget: { maxDepth: 6, maxViews: 32, minArea: 0.0005 },
     });
     limen.renderer.setSize(W, H, false);
     limen.camera.aspect = W / H;
@@ -77,7 +120,7 @@
     limen.camera.updateMatrixWorld();
 
     // write exact static poses from doc.bodies (avoid stubsim's floor-portal slider moving box 0)
-    const sim = createStubSim({...doc, portals: []});
+    const sim = createStubSim({ ...doc, portals: [] });
     const buf = new Float32Array(frameLength(sim.slots));
     sim.write(buf);
     limen.draw(buf, buf, 0, teleportMaps(doc.portals));
@@ -99,11 +142,11 @@
         min: [-R, 0, -R], max: [R, RH, R],
         faces: ['-x', '+x', '-y', '-z', '+z'],
         floor: ROOM['+y'],
-        walls: {'-x': ROOM['+x'], '+x': ROOM['-x'], '-y': ROOM['+y'], '-z': ROOM['+z'], '+z': ROOM['-z']},
+        walls: { '-x': ROOM['+x'], '+x': ROOM['-x'], '-y': ROOM['+y'], '-z': ROOM['+z'], '+z': ROOM['-z'] },
       },
       portals: [
-        {...p0, link: 1, color: PORTAL_HEX},
-        {...p1, link: 0, color: PORTAL_HEX},
+        { ...p0, link: 1, color: PORTAL_HEX },
+        { ...p1, link: 0, color: PORTAL_HEX },
       ],
       statics: BOX_SPECS.map((b) => ({
         c: b.pos, h: b.size.map((s) => s / 2),
@@ -126,7 +169,7 @@
         flat: 1, tint: 0, passFade: 1, depth: 6, wallsShown: 1,
         rim: 0.075, rimBand: 0.01, preciseRims: true, background: PAPER.background, deep: PORTAL_HEX,
       },
-    }, ianuaCam, {samples: 1, lineScale: 1.4});
+    }, ianuaCam, { samples: 1, lineScale: 1.4 });
     const ianuaStyledPx = readPixels(ianua.gl);
 
     // Pass B on Ianua (displayed): pure unstyled flat semantic colours, zero rim width, zero ink lines
@@ -136,22 +179,22 @@
         flat: 1, tint: 0, passFade: 1, depth: 6, wallsShown: 1,
         rim: 0, rimBand: 0, preciseRims: false, background: PAPER.background, deep: PORTAL_HEX,
       },
-    }, ianuaCam, {samples: 1, lineScale: 0});
+    }, ianuaCam, { samples: 1, lineScale: 0 });
     const ianuaPurePx = readPixels(ianua.gl);
     const limenPx = readPixels(limen.renderer.getContext());
 
     // 4. Semantic surface palette: classify each non-masked pixel to its geometric surface
     const LABELS = [
-      {name: 'sky', rgb: hex(PAPER.background)},
-      {name: 'floor', rgb: hex(ROOM['+y'])},
-      {name: 'wall+x', rgb: hex(ROOM['+x'])},
-      {name: 'wall-x', rgb: hex(ROOM['-x'])},
-      {name: 'wall+z', rgb: hex(ROOM['+z'])},
-      {name: 'wall-z', rgb: hex(ROOM['-z'])},
-      {name: 'box0', rgb: hex(BOX_SPECS[0].color)},
-      {name: 'box1', rgb: hex(BOX_SPECS[1].color)},
-      {name: 'box2', rgb: hex(BOX_SPECS[2].color)},
-      {name: 'terminal', rgb: hex(PORTAL_HEX)},
+      { name: 'sky', rgb: hex(PAPER.background) },
+      { name: 'floor', rgb: hex(ROOM['+y']) },
+      { name: 'wall+x', rgb: hex(ROOM['+x']) },
+      { name: 'wall-x', rgb: hex(ROOM['-x']) },
+      { name: 'wall+z', rgb: hex(ROOM['+z']) },
+      { name: 'wall-z', rgb: hex(ROOM['-z']) },
+      { name: 'box0', rgb: hex(BOX_SPECS[0].color) },
+      { name: 'box1', rgb: hex(BOX_SPECS[1].color) },
+      { name: 'box2', rgb: hex(BOX_SPECS[2].color) },
+      { name: 'terminal', rgb: hex(PORTAL_HEX) },
     ];
 
     // Normalized-hue + brightness distance tolerates Limen's smooth Lambert shading + 10% per-pass portal tint
@@ -236,4 +279,5 @@
       `Limen portal views drawn: ${limen.stats.views} (max depth ${limen.stats.maxDepthReached})`;
   </script>
 </body>
+
 </html>
