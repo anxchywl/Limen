@@ -137,3 +137,51 @@ Main-thread ms is `performance.now()` around `loop.tick`: sim steps, blending, m
 - **Replacing `stubsim.js`.** Prompt 03 replaces `createStubSim` with the Rapier worker bridge behind `slots`, `steps`, `write`, `step`, `add`, `reset`. Once Rapier drives slot 0 in prompt 03, bodies will simply fall onto the solid floor until prompt 04 adds portal sensors and transit clones.
 - **Rebuilding portals.** Whenever `doc.portals` changes, call `view.rebuildPortals()` and refresh `maps = teleportMaps(doc.portals)`.
 - **Debug handles.** Keys are `B` (spawn 2,000), `R` (reset), `P` (fly through next portal). `window.limen` exposes `doc`, `view`, `sim`, `loop`, `controls`, `spawn`, `reset`, `flyThrough(idx)` and `recordAlpha(ms)`.
+
+## 03: physics core in a worker (2026-11-01)
+
+**Done.** All acceptance and break checks pass in headless Node and on `http://localhost:5180`:
+- Rapier 3D 0.21 runs in a module Web Worker (`src/physics/worker.js` + `src/physics/world.js`), probing WASM SIMD via a 29-byte `WebAssembly.validate` module and loading `vendor/rapier/simd/rapier.mjs` with a `compat` fallback
+- static blocks build fixed cuboid colliders (and 6-vertex `convexHull` colliders for ramps); dynamic bodies (`box`, `ball`, `capsule`, `plank`) take document mass, pose and velocities; portals remain solid walls for prompt 04
+- fixed `1/60 s` worker clock (`setTimeout` accumulator clamped to 4 steps per tick) streaming poses through two ping-pong transferable `Float32Array` buffers; frames drop without blocking if both buffers are in flight
+- `createPhysicsBridge` (`src/physics/bridge.js`) interpolates one step behind worker time (phase-locked around the midpoint of `[prev, curr]`) and returns ping-pong buffers immediately; zero edits were needed in `src/render/*`
+- Rapier snapshot taken on load (and refreshed if edited before play); `Reset` restores initial `Float32Array` bytes and replays 5 s (`300` steps) with identical SHA-256 hashes
+- robustness guards: `60 m/s` linear and `50 rad/s` angular clamps (pre- and post-step), Ianua quadratic air drag (`terminalSpeed = 40 m/s`), per-step CCD toggling (`minDim < 0.3 m` or `speed > 15 m/s`), `0.1 m` minimum size, `0.5..25 kg` (`1:50`) mass cap, `contact_natural_frequency = 20 Hz`, free-space spawn intersection + `10 × 5 cm` upward nudges, `300`-body cap, kill bounds, NaN watchdog (`N` debug key) and `> 8 ms × 30` `busy` watchdog
+
+`node tests/core.mjs`, `node tests/interp.mjs`, `node tests/oblique.mjs` and `node tests/physics.mjs` pass, and `tests/oracle.html` still passes (`stubsim.js` moved to `tests/stubsim.js`).
+
+### File map
+
+| Path | What |
+|---|---|
+| `src/physics/protocol.js` | re-exports `src/core/frame.js` + `H_SLOTS = 3` (allocated slot span), `TO_WORKER` / `FROM_WORKER` message types, and `createSlotMap()` with lowest-free-slot reuse and snapshot/restore |
+| `src/physics/world.js` | pure Rapier world controller (`createPhysicsWorld`): colliders, fixed `1/60 s` step, snapshot reset, free-space spawn nudges, air drag, CCD toggle, speed/size/mass caps, NaN and `busy` watchdogs |
+| `src/physics/worker.js` | WASM SIMD probe, vendored Rapier loader, `setTimeout` 60 Hz accumulator (≤ 4 steps/tick), two ping-pong transferable `Float32Array` buffers |
+| `src/physics/bridge.js` | main-thread `Worker` host: `prev`/`curr` copies, immediate buffer return, one-step-behind `sample(frameDt)` interpolation, slot-indexed `bodies` sync |
+| `src/app/loop.js`, `src/main.js` | `loop.js` branches on `sim.sample` while keeping sync mock support for `tests/interp.mjs`; `main.js` wires `createPhysicsBridge`, `Space` play/pause, `.` single-step, `B` spawn to 300, `R` reset, `N` inject NaN |
+| `tests/physics.mjs` | headless Node suite on `@dimforge/rapier3d-simd-compat`: 2 m drop to sleep, 1,000-step snapshot hash, 5 s reset byte-identity, 300-body benchmark, NaN removal + slot reuse, 50 m/s anti-tunneling, 50-box spawn nudges, air drag and `busy` watchdog |
+| `tests/stubsim.js`, `tests/oracle.html` | moved `src/app/stubsim.js` → `tests/stubsim.js` as oracle test scaffolding only |
+
+### Measured (Apple Silicon Mac, Node v26 + Chrome Headless Metal WebGL2, DPR 2, 2560 × 1800)
+
+| Case | Worker / Node physics step | Main thread per frame | GPU per frame |
+|---|---|---|---|
+| 300 bodies, 600 steps in Node (`tests/physics.mjs`) | **0.96 ms avg** (p95 1.83 ms; ≤ 4 ms budget) | n/a | n/a |
+| 40 bodies, default scene in browser | ~0.15 ms | **0.40 ms avg** | 5.91 ms |
+| 300-body pile-up + continuous orbit drag, 120 rAF frames | off-thread | **0.32 ms avg**, p50 0.30, p95 0.40, max 0.70 ms (`0` frames > 4 ms) | 7.03 ms |
+
+- **Reset & 5 s replay determinism (browser worker):** `f0` SHA-256 `6beba978…` matched byte-for-byte after `Play 5 s → Reset`, and `f300` (`5.00 s`) SHA-256 `685c98b2…` matched byte-for-byte on the second 5 s run (`1,028` floats).
+- **Break checks (browser):**
+  - 50 `[0.5 m]` boxes at `[0, 2, 0]`: `2` accepted (`0` and `+0.50 m` nudges), `48` refused with `{type: 'refused', reason: 'blocked'}`, `maxCoord = 5.32 m`, zero NaNs.
+  - `25 kg` ball at `60 m/s` into a 6-box stack against the `+x` wall: `0` wall/floor penetrations (`maxWallX = 5.74 < 6.0`, `minY = 0.06 > 0`).
+  - `60 s` hidden-tab jump + `resync()`: return tick `0.20 ms`, no step burst.
+  - Debug key `N` (`injectNaN`): emitted `{type: 'removed', reason: 'nan', slot: 0}`, body count dropped `49 → 48`, simulation kept stepping cleanly (`gl.getError() = 0`).
+
+### Protocol & Rapier 0.21 notes (for prompt 04)
+
+- **Header layout:** `H_STEP = 0`, `H_TIME = 1`, `H_COUNT = 2` (live body count), `H_SLOTS = 3` (allocated slot span; reuses `header[3]` without changing `HEADER = 4` or `STRIDE = 16`). `src/render/instances.js` needed zero changes because `bridge.bodies` is indexed by slot with dead placeholders (`FLAGS = 0` hides freed slots).
+- **Depenetration parameter in Rapier 0.21:** `@dimforge/rapier3d-simd-compat@0.21.0` uses TGS-Soft contact springs and exposes `IntegrationParameters.contact_natural_frequency` (set to `20 Hz`, down from default `30 Hz`) rather than a `maxDepenetrationVelocity` cap; combined with post-step `60 m/s` / `50 rad/s` clamps, overlapping spawns recover softly.
+- **Immediate overlap tests:** `world.intersectionWithShape` only sees colliders after `world.step()` updates the broad phase, so `world.js` `intersectsAny` pre-filters by AABB/sphere and calls `collider.intersectsShape(probe, pos, rot)` directly.
+- **Hooks for prompt 04 (`transit.js`, `ghosts.js`):**
+  - `world.js` steps via `world.step()` inside `stepOne()` and stores `blocks` (`{id, rbHandle, colHandle, rb, collider, min, max, spec}`) and `entries` (`{id, slot, rbHandle, colHandle, rb, collider, minDim, boundR, spec}`).
+  - Pass `{filterContactPair}` into `world.step(undefined, physicsHooks)` (with `ActiveHooks.FILTER_CONTACT_PAIRS` on transiting colliders) to carve host-wall holes, use `kinematicPositionBased` bodies for clones and mapped far-side ghost walls, and write `HAS_CLONE`, `CLONE_POS`, `CLONE_QUAT`, `SPARE` (entry portal index `0 .. portals.length - 1`) and one-step `withTeleport(flags, entryIdx)` into `write(buf)`. Include any per-body transit state (such as the 3-step reverse-teleport cooldown) in `saveSnapshot()` / `reset()`.
