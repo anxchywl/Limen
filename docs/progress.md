@@ -185,3 +185,59 @@ Main-thread ms is `performance.now()` around `loop.tick`: sim steps, blending, m
 - **Hooks for prompt 04 (`transit.js`, `ghosts.js`):**
   - `world.js` steps via `world.step()` inside `stepOne()` and stores `blocks` (`{id, rbHandle, colHandle, rb, collider, min, max, spec}`) and `entries` (`{id, slot, rbHandle, colHandle, rb, collider, minDim, boundR, spec}`).
   - Pass `{filterContactPair}` into `world.step(undefined, physicsHooks)` (with `ActiveHooks.FILTER_CONTACT_PAIRS` on transiting colliders) to carve host-wall holes, use `kinematicPositionBased` bodies for clones and mapped far-side ghost walls, and write `HAS_CLONE`, `CLONE_POS`, `CLONE_QUAT`, `SPARE` (entry portal index `0 .. portals.length - 1`) and one-step `withTeleport(flags, entryIdx)` into `write(buf)`. Include any per-body transit state (such as the 3-step reverse-teleport cooldown) in `saveSnapshot()` / `reset()`.
+
+## 04: bodies through portals (2026-11-01)
+
+**Done.** All 9 headless transit cases, the 300-body / 40-in-transit performance budget, and all browser slow-motion acceptance checks pass with **zero changes to `src/render/*` or `src/core/*`**:
+- **Carves (`src/physics/transit.js`):** each portal builds a ring of 12 thick bevelled slab colliders (`depth = 3.0 m = 2 × 1.5 m`, thickness `≥ 0.4 m`, flush at `z_local = 0`) around an inscribed 12-gon plus a `0.08 m` opening plug, filtered via Rapier collision groups and `filterContactPair` (`Map` of `colHandle -> role`, `Map`/`Set` of `rbHandle` + `portalIdx`).
+- **Ghosts (`src/physics/ghosts.js`):** static blocks (`box`, `pillar`, `ramp`) within `3 m` in front of partner `Q` are clipped by 3D Sutherland–Hodgman half-space intersection, chamfered `5 mm` over `2.5 cm` along peripheral `z_Q = 0` threshold cuts, and mapped behind `P` with `portalMap(Q, P)` as fixed `convexHull` colliders (`ghost:P`), rebuilt only when blocks or portals change.
+- **Clones & feedback (`src/physics/transit.js`):** one-portal-at-a-time transit zone (`+5 cm` front, `-3.0 m` tunnel depth, 1-step velocity sweep for fast approaches) spawns a `kinematicPositionBased` clone on `Q`, drives `setNextKinematicTranslation` / `setNextKinematicRotation` to `M · predictedPose`, feeds `0.8 · R⁻¹` clone impulses back to the master at the mapped local contact point (including CCD substep separations), and caps connected-island kinetic energy so infinite-mass kinematic clones never inject energy into multi-body stacks.
+- **Teleport & edge cases:** swept-centre `crossing` with a `1 cm` hysteresis band and `dot(v, P.n) < 0` swaps master pose/velocities by `M` (`R v`, `R ω`), moves the clone to the old master pose, switches active transit to `Q` with a 3-step pair cooldown, writes `withTeleport(flags, pIdx)` (`portalIdx + 1`) across dropped ping-pong frames, reconciles mid-transit portal edits/removals (`portal_ejected`), caps discrete single-step ghost overshoot via `contactCollider`, and enforces host-wall/level bounds on side-by-side wall pairs.
+- **Slow-motion debug key (`T`):** cycles `timeScale` `1 → 0.25 → 0.1 → 1` (`main.js`, preserved across `Reset` in `world.js`, linear interpolation in `bridge.js`).
+
+`node tests/core.mjs`, `node tests/interp.mjs`, `node tests/oblique.mjs`, `node tests/physics.mjs` and `node tests/transit.mjs` all pass, and `tests/oracle.html` passes unchanged.
+
+### File map
+
+| Path | What |
+|---|---|
+| `src/physics/ghosts.js` | `buildPortalGhosts`, `blockCorners`: 3D convex polyhedron clipper (`3 m` reach in front of `Q`), coplanar/facing-portal skip, threshold chamfer, `portalMap(Q, P)` fixed `convexHull` colliders |
+| `src/physics/transit.js` | `createPortalTransit`: 12-slab tunnel + plug carves, collision groups, `filterContactPair` hook + `lastHookMs`, kinematic clone lifecycle, `0.8 · R⁻¹` impulse feedback + island KE cap, swept-centre teleport + 3-step cooldown, mid-transit portal removal/move reconciliation, wall/level bounds guard, `writeSlot` and `snapshot`/`restore` |
+| `src/physics/world.js` | wires `RAPIER.EventQueue(true)` (required by Rapier 0.21 `step` to invoke `PhysicsHooks`) and `transit` into `load`, `reset`, `saveSnapshot`, `spawn`, `remove` (bodies & portals), `edit` (bodies & portals), `setPortals`, `stepOne` and `write(buf, sinceStep)` |
+| `src/physics/worker.js` | tracks `lastPostedStep` so `withTeleport` flags survive dropped ping-pong frames |
+| `src/physics/bridge.js` | disables 1× midpoint phase-drift pullback when `timeScale < 0.99` so `0.25×` and `0.1×` sweep `alpha` linearly |
+| `src/main.js` | `T` slow-motion toggle (`1×` / `0.25×` / `0.1×`), scale badge in `#debug`, `portal_ejected` notice |
+| `tests/transit.mjs` | headless Node suite covering `drop`, `rest`, `plank`, `blocked`, `endless`, `sidebyside`, `removed`, `fast`, `stack` and the `300`-body / `40+` in-transit benchmark |
+
+### Measured (Apple Silicon Mac, Node v26 + Chrome Headless Metal WebGL2, DPR 2, 2560 × 1640)
+
+| Case | Measured | Target |
+|---|---|---|
+| `drop` (`tests/transit.mjs`) | `1` teleport, speed error **1.79 %**, direction `cos = 1.00000` | ≤ 2 % |
+| `rest` (5 s half-in floor portal) | `0` teleports, centre jitter **0.0000 mm** (`y = +4.9 mm`) | < 2 mm, 0 flip-flops |
+| `plank` (3 m across / lengthwise 1.4 m opening) | across: `0` teleports, `minY = 0.060 m`; lengthwise: `1` teleport | rests across, passes lengthwise |
+| `blocked` (solid block covering exit) | `0` teleports, max penetration **0.20 cm** | < 2 cm |
+| `endless` (60 s floor ↔ ceiling, 3,600 steps) | `568` teleports, `40.081 m/s` (**0.20 %** from `40 m/s`), `0` NaN | `40 m/s ± 5 %` |
+| `sidebyside` (200 random throws, same wall) | `200` throws, `39` teleports, **0** wall/level escapes | 0 escapes |
+| `removed` (delete exit / move entry mid-transit) | `2` `portal_ejected` pushes clear of wall; `1` live-partner teleport | in front of wall, never inside |
+| `fast` (0.15 m ball, `40 m/s`, 15° graze) | opening hit: `1` teleport; collar graze: `0` teleports, `0` wall tunnel | teleports cleanly, 0 tunnelling |
+| `stack` (10-box stack pushed into wall portal) | **10 / 10** emerged (`11` teleports incl. ram), max step KE gain **3.57 %** | 10 emerged, ≤ 5 % KE/step |
+| `perf300_40` (`300` bodies, `64–71` simultaneously in transit) | step **1.88 ms avg**, `filterContactPair` hook **0.027 ms avg** | step ≤ 5 ms, hook ≤ 0.5 ms |
+| `tests/physics.mjs` (`300` bodies, `defaultScene` w/ portals) | **2.17 ms/step avg** (1,000-step & 5 s reset byte-identity pass) | ≤ 4 ms |
+| Browser default scene (`42` bodies, 4 portal views) | main **0.78 ms avg**, GPU **4.83 ms** | ≤ 4 ms main, ≤ 10 ms GPU |
+| Browser `300` bodies w/ active portals | main **0.26 ms avg**, GPU **6.46 ms**, `gl.getError() = 0` | ≤ 4 ms main, ≤ 10 ms GPU |
+| Browser `0.1×` slow-mo (`318` rAF frames across teleport) | halves seam **0.00037 mm**, max frame jump **6.05 mm**, `0` clone dropouts | seamless, 0 flicker/streak |
+
+### Known limits & Rapier 0.21 notes (for prompt 05)
+
+- **Rapier 0.21 Quirks:**
+  - `world.step(eventQueue, hooks)` ignores `hooks` unless a non-null `EventQueue` is passed as the first argument (`world.js` passes `eventQueue` and clears it each step).
+  - `rb.handle` and `col.handle` are IEEE-754 `f64` bitcasts of `(gen << 32) | idx` (including subnormal floats like `5e-324`), so compound keys must unpack handle bits via `Float64Array` / `Uint32Array` rather than float multiplication.
+  - `rb.setTranslation()` defers updating collider shapes until `world.propagateModifiedBodyPositionsToColliders()`, which `transit.js` calls immediately after teleports before querying `contactCollider`.
+- **Remaining physics limits:**
+  - Rigid-body colliders assume unit-scale portal pairs (`portalScale(P, Q) = 1`; the renderer already scales visual clones, while Rapier colliders stay rigid).
+  - One-portal-at-a-time: a body touching two portals simultaneously enters the closer opening and treats the second portal's plug as solid until leaving the first transit zone.
+  - Clone contact feedback (`0.8 · R⁻¹` impulse + connected-island energy cap) approximates two-body coupling across one step rather than solving cross-portal Jacobians simultaneously inside Rapier's TGS solver, so very heavy stacks resting half-way across a vertical portal settle slightly softer than on a single solid floor.
+- **Hooks for prompt 05 (`src/editor/*`):**
+  - `sim.remove(id)` and `sim.edit(entity)` already handle both dynamic bodies and portals (`p*` IDs), and `sim.setPortals(portals)` replaces the full portal list — each automatically rebuilds carves and ghosts in the worker and reconciles any bodies currently in transit (emitting `{type: 'portal_ejected', id, portal}` when a straddling body is pushed clear).
+  - Whenever blocks or portals are added, moved or deleted in the editor on the main thread, also refresh `maps = teleportMaps(doc.portals)`, `view.rebuildPortals()` and `view.bodies.setPortals(doc.portals)` (and rebuild `view.level` when blocks change).
