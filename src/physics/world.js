@@ -4,9 +4,10 @@
 // depenetration frequency cap, NaN and step-time watchdogs), and supports exact snapshot reset.
 
 import {
-  ALIVE, FLAGS, H_COUNT, H_SLOTS, H_STEP, H_TIME, POS, QUAT,
-  createSlotMap, frameLength, slotOffset,
+  H_COUNT, H_SLOTS, H_STEP, H_TIME, POS, QUAT,
+  createSlotMap, slotOffset,
 } from './protocol.js';
+import {CG_DYN_FREE, CG_STATIC, createPortalTransit} from './transit.js';
 
 export const DT = 1 / 60;
 export const MAX_LINVEL = 60;
@@ -23,9 +24,7 @@ const BUSY_MS = 8;
 const BUSY_STREAK = 30;
 const KILL_Y = -60;
 const KILL_EXTENT = 250;
-// Rapier 0.21 exposes contact recovery stiffness as `IntegrationParameters.contact_natural_frequency`
-// (default 30 Hz -> erp ~0.136); 20 Hz (~0.095 erp) softens overlap recovery so stacked/nudged bodies never pop
-const CONTACT_FREQ_HZ = 20;
+const CONTACT_FREQ_HZ = 25;
 
 const finite3 = (a) => Number.isFinite(a.x) && Number.isFinite(a.y) && Number.isFinite(a.z);
 const finite4 = (q) => Number.isFinite(q.x) && Number.isFinite(q.y) && Number.isFinite(q.z) && Number.isFinite(q.w);
@@ -64,11 +63,15 @@ function cloneBodySpec(b) {
 
 export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now()} = {}) {
   const slots = createSlotMap();
+  const eventQueue = new RAPIER.EventQueue(true);
+  const transit = createPortalTransit(RAPIER, {onEvent, now});
   let world = null;
   let settings = {
     gravity: [0, -9.81, 0], terminalSpeed: 40, timeScale: 1, quality: 'auto', maxBodies: DEFAULT_MAX_BODIES,
   };
   let blocks = new Map(); // blockId -> {id, rbHandle, colHandle, min, max, spec}
+  let portals = [];       // cloned portal specs from scene.portals
+  let bounds = null;      // optional explicit {min, max} level bounds
   let entries = [];       // [{id, slot, rbHandle, colHandle, rb, collider, minDim, boundR, spec}]
   let byId = new Map();   // bodyId -> entry
   let steps = 0;
@@ -121,7 +124,7 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
   function addStaticBlock(b) {
     const info = blockColliderDesc(b);
     if (!info.desc) return;
-    info.desc.setFriction(0.6).setRestitution(0.2);
+    info.desc.setFriction(0.6).setRestitution(0.2).setCollisionGroups(CG_STATIC);
     const rbDesc = RAPIER.RigidBodyDesc.fixed()
       .setTranslation(info.pos[0], info.pos[1], info.pos[2])
       .setRotation({x: info.rot[0], y: info.rot[1], z: info.rot[2], w: info.rot[3]});
@@ -226,6 +229,7 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
     if (byId.has(id)) remove(id, 'replace');
 
     const ccd = minDim < CCD_MIN_SIZE || linSpeed > CCD_SPEED;
+    desc.setCollisionGroups(CG_DYN_FREE);
     const rbDesc = RAPIER.RigidBodyDesc.dynamic()
       .setTranslation(px, py, pz)
       .setRotation(rotObj)
@@ -246,6 +250,7 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
     };
     entries.push(entry);
     byId.set(id, entry);
+    transit.registerDynamicBody(entry);
     return {ok: true, id, slot, nudges, body: cloneBodySpec(spec)};
   }
 
@@ -255,6 +260,7 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
     entries.splice(idx, 1);
     byId.delete(e.id);
     slots.free(e.id);
+    transit.unregisterDynamicBody(e);
     if (world && e.rb?.isValid?.()) world.removeRigidBody(e.rb);
     emit({type: 'removed', reason, id: e.id, slot: e.slot});
     return true;
@@ -266,6 +272,9 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
       rapierBytes: world.takeSnapshot(),
       slots: slots.snapshot(),
       settings: structuredClone(settings),
+      portals: structuredClone(portals),
+      bounds: bounds ? structuredClone(bounds) : null,
+      transit: transit.snapshot(),
       steps,
       blocks: [...blocks.values()].map((b) => ({
         id: b.id, rbHandle: b.rbHandle, colHandle: b.colHandle,
@@ -282,8 +291,11 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
 
   function load(scene) {
     if (world) { world.free(); world = null; }
+    eventQueue.clear();
     slots.clear();
     blocks.clear();
+    portals = (scene.portals ?? []).map((p) => structuredClone(p));
+    bounds = scene.bounds ? structuredClone(scene.bounds) : null;
     entries = [];
     byId.clear();
     steps = 0;
@@ -302,6 +314,7 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
 
     for (const b of scene.blocks ?? []) addStaticBlock(b);
     for (const b of scene.bodies ?? []) insertDynamicBody(b, {checkFreeSpace: false});
+    transit.rebuild(world, portals, blocks, entries, {steps, bounds});
     saveSnapshot();
     emit({type: 'loaded', bodies: entries.map((e) => ({slot: e.slot, body: cloneBodySpec(e.spec)}))});
   }
@@ -309,9 +322,14 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
   function reset() {
     if (!snap) return false;
     if (world) { world.free(); world = null; }
+    eventQueue.clear();
     world = RAPIER.World.restoreSnapshot(snap.rapierBytes);
     slots.restore(snap.slots);
+    const curTimeScale = settings.timeScale;
     settings = structuredClone(snap.settings);
+    settings.timeScale = curTimeScale;
+    portals = structuredClone(snap.portals);
+    bounds = snap.bounds ? structuredClone(snap.bounds) : null;
     steps = snap.steps;
     busyCount = 0;
     busyLatched = false;
@@ -333,6 +351,7 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
       collider: world.getCollider(e.colHandle),
     }));
     byId = new Map(entries.map((e) => [e.id, e]));
+    transit.restore(world, snap.transit, entries);
     emit({type: 'reset', bodies: entries.map((e) => ({slot: e.slot, body: cloneBodySpec(e.spec)}))});
     return true;
   }
@@ -346,6 +365,8 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
     }
     const res = insertDynamicBody(body, {checkFreeSpace: true});
     if (res.ok) {
+      const e = byId.get(res.id);
+      if (e) transit.syncBodies([e], 0);
       if (inEdit) dirtyEdit = true;
       emit({type: 'spawned', id: res.id, slot: res.slot, nudges: res.nudges, body: res.body});
     }
@@ -362,6 +383,15 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
     if (blk) {
       blocks.delete(id);
       if (world && blk.rb?.isValid?.()) world.removeRigidBody(blk.rb);
+      if (world && reason !== 'edit') transit.rebuild(world, portals, blocks, entries, {steps, bounds});
+      if (inEdit) dirtyEdit = true;
+      emit({type: 'removed', reason, id, slot: -1});
+      return true;
+    }
+    const pIdx = portals.findIndex((p) => p.id === id);
+    if (pIdx >= 0) {
+      portals.splice(pIdx, 1);
+      if (world) transit.rebuild(world, portals, blocks, entries, {steps, bounds});
       if (inEdit) dirtyEdit = true;
       emit({type: 'removed', reason, id, slot: -1});
       return true;
@@ -381,16 +411,37 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
       if (entity.vel) e.rb.setLinvel({x: entity.vel[0], y: entity.vel[1], z: entity.vel[2]}, true);
       if (entity.angvel) e.rb.setAngvel({x: entity.angvel[0], y: entity.angvel[1], z: entity.angvel[2]}, true);
       Object.assign(e.spec, entity);
+      transit.syncBodies([e], 0);
       if (inEdit) dirtyEdit = true;
       return true;
     }
     if (blocks.has(entity.id)) {
       remove(entity.id, 'edit', {inEdit});
       addStaticBlock(entity);
+      transit.rebuild(world, portals, blocks, entries, {steps, bounds});
+      if (inEdit) dirtyEdit = true;
+      return true;
+    }
+    const pIdx = portals.findIndex((p) => p.id === entity.id);
+    if (pIdx >= 0) {
+      portals[pIdx] = structuredClone({...portals[pIdx], ...entity});
+      transit.rebuild(world, portals, blocks, entries, {steps, bounds});
+      if (inEdit) dirtyEdit = true;
+      return true;
+    }
+    if (entity.c && entity.n) {
+      portals.push(structuredClone(entity));
+      transit.rebuild(world, portals, blocks, entries, {steps, bounds});
       if (inEdit) dirtyEdit = true;
       return true;
     }
     return false;
+  }
+
+  function setPortals(nextPortals, {inEdit = false} = {}) {
+    portals = (nextPortals ?? []).map((p) => structuredClone(p));
+    if (world) transit.rebuild(world, portals, blocks, entries, {steps, bounds});
+    if (inEdit) dirtyEdit = true;
   }
 
   function setSettings(patch = {}, {inEdit = false} = {}) {
@@ -457,8 +508,18 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
       if (wantCcd !== rb.isCcdEnabled()) rb.enableCcd(wantCcd);
     }
 
-    world.step();
+    transit.beforeStep(entries, DT);
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      if (transit.bodyPortalSet.size > 0 && e.collider.activeHooks() !== 0 && !e.rb.isCcdEnabled()) {
+        e.rb.enableCcd(true);
+      }
+    }
+    // Rapier 0.21 only forwards physics hooks into WASM when an EventQueue is passed as arg 1
+    world.step(eventQueue, transit.hooks);
+    eventQueue.clear();
     steps++;
+    transit.afterStep(entries, steps, settings, blocks);
 
     // post-step: catch solver NaNs and cap post-impact / depenetration speeds before writing frames
     for (let i = entries.length - 1; i >= 0; i--) {
@@ -503,7 +564,7 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
     return total;
   }
 
-  function write(buf) {
+  function write(buf, sinceStep) {
     buf.fill(0);
     buf[H_STEP] = steps;
     buf[H_TIME] = steps * DT;
@@ -512,19 +573,21 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
       const o = slotOffset(e.slot);
-      if (o + 8 > buf.length) continue;
+      if (o + 16 > buf.length) continue;
       const p = e.rb.translation(), q = e.rb.rotation();
       buf[o + POS] = p.x; buf[o + POS + 1] = p.y; buf[o + POS + 2] = p.z;
       buf[o + QUAT] = q.x; buf[o + QUAT + 1] = q.y; buf[o + QUAT + 2] = q.z; buf[o + QUAT + 3] = q.w;
-      buf[o + FLAGS] = ALIVE;
+      transit.writeSlot(e, buf, o, steps, sinceStep);
     }
     return buf;
   }
 
   return {
-    load, spawn, remove, edit, setSettings, saveSnapshot, reset, step, write, injectNaN,
+    load, spawn, remove, edit, setPortals, setSettings, saveSnapshot, reset, step, write, injectNaN,
     snapshotBytes: () => world?.takeSnapshot() ?? new Uint8Array(0),
     get world() { return world; },
+    get transit() { return transit; },
+    get portals() { return portals; },
     get slots() { return slots.span; },
     get count() { return slots.count; },
     get steps() { return steps; },
@@ -532,7 +595,10 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
     get settings() { return settings; },
     get entries() { return entries; },
     get lastStepMs() { return lastStepMs; },
+    get lastHookMs() { return transit.lastHookMs; },
+    get teleportCount() { return transit.teleportCount; },
+    get activeTransitCount() { return transit.activeCount; },
     get dirtyEdit() { return dirtyEdit; },
-    dispose() { if (world) { world.free(); world = null; } },
+    dispose() { eventQueue.free(); if (world) { world.free(); world = null; } },
   };
 }

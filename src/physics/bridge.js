@@ -148,9 +148,10 @@ export function createPhysicsBridge(doc, {autoplay = true, onBodiesChanged, onEv
           renderTime = t0 + Math.min(0.5 * DT, frameDt * scale);
           primed = true;
         } else {
-          // render one step behind: gently phase-lock toward the midpoint of [t0, t1]
+          // render one step behind: gently phase-lock toward the midpoint at 1x, linear sweep in slow-mo
           const target = t1 - 0.5 * DT;
-          renderTime += Math.max(0, frameDt * scale + (target - renderTime) * 0.05);
+          const drift = scale >= 0.99 ? (target - renderTime) * 0.05 : 0;
+          renderTime += Math.max(0, frameDt * scale + drift);
         }
         if (renderTime < t0) renderTime = t0;
         if (renderTime > t1) renderTime = t1;

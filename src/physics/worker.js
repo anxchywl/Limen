@@ -25,6 +25,7 @@ function targetFloatLength(slots) {
 let sim = null;
 let playing = false;
 let hasSteppedSinceSnap = false;
+let lastPostedStep = 0;
 let timer = 0;
 let lastTick = null;
 let acc = 0;
@@ -47,7 +48,9 @@ function postFrame({force = false} = {}) {
   }
   const want = targetFloatLength(sim.slots);
   if (buf.length !== want) buf = new Float32Array(want);
-  sim.write(buf);
+  const since = sim.steps > lastPostedStep ? lastPostedStep : undefined;
+  sim.write(buf, since);
+  lastPostedStep = sim.steps;
   self.postMessage({type: FROM_WORKER.FRAME, buffer: buf}, [buf.buffer]);
   return true;
 }
@@ -100,6 +103,7 @@ function handleMessage(msg) {
       playing = false;
       acc = 0;
       hasSteppedSinceSnap = false;
+      lastPostedStep = 0;
       sim.load(msg.scene);
       postFrame({force: true});
       if (msg.play) {
@@ -154,6 +158,7 @@ function handleMessage(msg) {
       stopClock();
       acc = 0;
       hasSteppedSinceSnap = false;
+      lastPostedStep = 0;
       if (sim.reset()) postFrame({force: true});
       if (msg.play) {
         playing = true;
