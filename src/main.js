@@ -1,6 +1,6 @@
 // Limen entry: builds the default scene document, the renderer, the Rapier worker bridge and the
 // frame loop, and wires the orbit camera and a small debug readout.
-// Debug keys: Space play/pause, . single-step, B spawn up to 300 bodies, R reset, N inject NaN, P fly portal.
+// Debug keys: Space play/pause, . single-step, T slow-mo (1x/0.25x/0.1x), B spawn, R reset, N NaN, P fly portal.
 
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {apply, applyDir, madd, scale} from './core/vec.js';
@@ -27,6 +27,8 @@ const sim = createPhysicsBridge(doc, {
       setNotice(`spawn refused (${ev.reason})`);
     } else if (ev.type === 'busy') {
       setNotice('simulation busy', 5000);
+    } else if (ev.type === 'portal_ejected') {
+      setNotice(`pushed ${ev.id} clear of ${ev.portal}`);
     }
   },
 });
@@ -134,11 +136,13 @@ const loop = createLoop({
 const readout = document.querySelector('#debug');
 setInterval(() => {
   const s = loop.stats, gpu = view.gpuMs, vs = view.stats;
+  const ts = doc.settings.timeScale ?? 1;
+  const scaleLabel = ts === 1 ? '' : ` · ${ts}×`;
   const note = notice && performance.now() < notice.until ? ` · ${notice.text}` : '';
   readout.textContent = `${s.msAvg.toFixed(2)} ms (max ${s.msMax.toFixed(1)})` +
     (Number.isNaN(gpu) ? '' : ` · gpu ${gpu.toFixed(2)} ms`) +
     ` · views ${vs.views}/${vs.budget} d${vs.maxDepthReached}/${vs.maxDepth}` +
-    ` · step ${sim.steps} · ${sim.count} bodies` +
+    ` · step ${sim.steps} · ${sim.count} bodies${scaleLabel}` +
     `${sim.playing ? '' : ' · paused'}${sim.busy ? ' · simulation busy' : ''}${note}` +
     `${view.lost ? ' · context lost' : ''}`;
 }, 250);
@@ -194,6 +198,11 @@ addEventListener('keydown', (e) => {
   if (e.key === 'r' || e.key === 'R') reset();
   if (e.key === 'n' || e.key === 'N') sim.injectNaN();
   if (e.key === 'p' || e.key === 'P') flyThrough();
+  if (e.key === 't' || e.key === 'T') {
+    const cur = doc.settings.timeScale ?? 1;
+    const next = cur > 0.5 ? 0.25 : cur > 0.15 ? 0.1 : 1;
+    sim.setSettings({timeScale: next});
+  }
 });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) loop.resync(); });
 view.onRestored = () => {
