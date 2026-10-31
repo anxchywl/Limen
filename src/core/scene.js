@@ -64,6 +64,16 @@ export function addBody(scene, b) {
   return body;
 }
 
+export function addEmitter(scene, e) {
+  const emitter = {
+    id: newId(scene, 'e'), shape: 'ball', size: [0.4, 0.4, 0.4], pos: [0, 3, 0], quat: [0, 0, 0, 1],
+    rate: 2, speed: 4, mass: 1, color: null, ...e,
+  };
+  scene.emitters ??= [];
+  scene.emitters.push(emitter);
+  return emitter;
+}
+
 // deterministic pseudo random, so the default scene is the same on every load
 export function rng(seed = 1) {
   let s = seed >>> 0;
