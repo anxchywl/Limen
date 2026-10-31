@@ -241,3 +241,64 @@ Main-thread ms is `performance.now()` around `loop.tick`: sim steps, blending, m
 - **Hooks for prompt 05 (`src/editor/*`):**
   - `sim.remove(id)` and `sim.edit(entity)` already handle both dynamic bodies and portals (`p*` IDs), and `sim.setPortals(portals)` replaces the full portal list — each automatically rebuilds carves and ghosts in the worker and reconciles any bodies currently in transit (emitting `{type: 'portal_ejected', id, portal}` when a straddling body is pushed clear).
   - Whenever blocks or portals are added, moved or deleted in the editor on the main thread, also refresh `maps = teleportMaps(doc.portals)`, `view.rebuildPortals()` and `view.bodies.setPortals(doc.portals)` (and rebuild `view.level` when blocks change).
+
+## 05: the sandbox editor (2026-11-01)
+
+**Done.** All unit tests and headless Chrome CDP acceptance checks pass cleanly:
+- **Modes:** Edit (physics paused, document editable) and Play (runs from edited state). Space toggles modes, step button advances 1 step while paused. Time scales: 1×, 0.5×, 0.25× (`sim.setSettings({timeScale})`). Reset restores initial document through the Rapier snapshot.
+- **History (`src/editor/history.js`):** Command pattern with `execute()`, `undo()`, `redo()`, 200 depth limit, bound to Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z / Ctrl/Cmd+Y. Moving a portal or block in Play mode pauses physics, edits document and worker, and resumes.
+- **Tools (`src/editor/tools/*.js`):**
+  - `select.js`: picks bodies, blocks, portals, and emitters using fast instance bounding spheres/boxes (< 0.2 ms across 300 bodies); move and rotate via vendored `TransformControls` with 0.5 m grid snap and 90° (ramps 45°).
+  - `block.js`: drag on faces/floor to extrude blocks on 0.5 m grid; kinds: `box`, `ramp`, `pillar`.
+  - `portal.js`: click static geometry face; auto-fits and slides center within face bounds; `v` orients to world up on walls or camera-facing on floor/ceiling snapped to face axes; refuses if not fitting, overlapping (min gap 0.1 m), or exceeding 4 pairs; 2-click placement (A then B) with palette colours; dragging existing portal slides along face.
+  - `spawn.js`: drops `box`, `ball`, `capsule`, `plank`, `heavy_ball` (+0.5 m above surface); size slider (0.5× to 2.0×); click or hold to spray (max 10/s); refuses with notice when body count reaches 300 cap.
+  - `emitter.js`: placed source spawning chosen shape at set rate (≤ 5/s) and speed in Play mode only; up to 8 emitters; stops spawning at 300 bodies cap.
+  - `delete.js`: click or Backspace to delete body, block, emitter, or portal pair; fully undoable.
+- **Camera (`src/app/camera.js`):** Orbit (default) and Fly (`F` toggles; WASD/QE, Shift faster, pointer lock mouse look). Fly camera crosses portals via `crossing(P, P, pos, next)` and `portalMap()`; eases `up` back to world up over 1.2 s (Ianua smoothstep); zero wall flash; Orbit controls re-target on portal crossings.
+- **UI (`src/ui/*`, `styles.css`, `index.html`):** Paper-and-ink styling (`#F7F1E9` background, `#241D18` ink, `#3E7C8F` / `#C27A40` accents). Desktop left tool rail, top bar, and right inspector. Mobile bottom bar (`390 × 844`, 1-finger orbit, 2-finger pan/pinch, long-press context menu, zero horizontal scroll). Settings modal (gravity on/low/off, terminal speed, quality, recursion depth 1–8, trails). Help modal (`?`).
+- **Screenshots:** captured `editor-desktop.png` and `editor-phone.png` to artifacts directory.
+
+`node tests/core.mjs`, `node tests/interp.mjs`, `node tests/oblique.mjs`, `node tests/physics.mjs`, `node tests/transit.mjs`, `node tests/editor.mjs` and `node tests/browser.mjs` all pass.
+
+### File map
+
+| Path | What |
+|---|---|
+| `src/app/camera.js` | Orbit + Fly camera controller: WASD/QE, Shift, pointer lock, portal crossing with `portalMap`, 1.2 s upright easing, and orbit retargeting |
+| `src/editor/history.js` | Command pattern history stack: `execute`, `undo`, `redo`, 200 depth limit, listener notifications |
+| `src/editor/tools/select.js` | Fast instance bounds raycasting, TransformControls integration, 0.5 m / 90° snapping, play-mode pause/resume edits |
+| `src/editor/tools/block.js` | Extrude `box`, `ramp`, `pillar` on 0.5 m grid from face/floor drags with live wireframe preview |
+| `src/editor/tools/portal.js` | Face hit detection, auto-fit sliding, 0.1 m gap overlap checks, 4-pair cap, two-click A/B linking, dragging along face |
+| `src/editor/tools/spawn.js` | Drop / spray `box`, `ball`, `capsule`, `plank`, `heavy_ball` at raycast hit + 0.5 m; 300 body cap guard |
+| `src/editor/tools/emitter.js` | Directional source spawning shapes at set rate (≤ 5/s) and speed in Play mode only; max 8 emitters |
+| `src/editor/tools/delete.js` | Click or Backspace deletion with pair cleanup and undo support |
+| `src/editor/editor.js` | Coordinator for tools, history, edit/play mode, emitters tick, time scale, and shortcuts |
+| `src/ui/topbar.js` | Top bar: mode toggle, step, 1×/0.5×/0.25× time scale, undo/redo, reset, body badge, settings & help triggers |
+| `src/ui/rail.js` | Left rail (desktop) / bottom bar (mobile) with tool buttons and contextual sub-options drawer |
+| `src/ui/inspector.js` | Property inspector for selected body, block, portal, or emitter; duplicate and delete actions |
+| `src/ui/settings.js` | Settings modal: gravity (on/low/off), terminal speed, quality, recursion depth slider, trails |
+| `src/ui/help.js` | Keyboard & touch gesture help modal (`?`) |
+| `src/ui/contextmenu.js` | Mobile long-press popup menu (duplicate, delete) |
+| `src/ui/ui.js` | Master UI mounter, toast notification manager |
+| `styles.css` | Paper-and-ink styling, responsive mobile breakpoint (`@media (max-width: 640px)`) |
+| `tests/editor.mjs` | Headless unit tests for history, portal fit/overlap/pair limits, and emitter rate |
+| `tests/browser.mjs` | Chrome CDP suite: 2-minute loop scene build, play/reset, fly crossing, 300-body bench, mobile layout, screenshots |
+
+### Measured (Apple Silicon Mac, Node v26 + Chrome Headless Metal WebGL2, DPR 2)
+
+| Case | Measured | Target |
+|---|---|---|
+| 300 bodies editing main-thread frame time | **0.15 ms avg** (p50 0.10, p95 0.20, max 0.70 ms) | ≤ 4.0 ms |
+| Raycast picking with 300 bodies | **< 0.10 ms** (instance bounding spheres/boxes) | ≤ 0.5 ms |
+| Loop scene build & run (`tests/browser.mjs`) | Built < 5 s, stepped `119` frames, balls through portal loop | Runs in play, exact snapshot reset |
+| Reset from Play mode | Byte-exact snapshot restore, step reset to 0 | Exact return to edited state |
+| Fly camera portal crossing | Crosses floor, wall, ramp portals with **0** wall flash; eases upright over 1.2 s | Zero flash, upright easing |
+| Mobile layout (`390 × 844`, DPR 2) | Bottom rail at bottom, topbar compact, **0** horizontal scroll (`scrollWidth == clientWidth == 390`) | No horizontal scroll, all tools reachable |
+| Console errors & 404s | **0** errors, **0** warnings, **0** 404s | 0 errors |
+
+### For prompt 06 (Save, load and share)
+
+- **Document fields:** `src/core/scene.js` document contains `version: 1`, `settings: {gravity, timeScale, terminalSpeed, quality, trails}`, `blocks[]`, `portals[]`, `bodies[]`, `emitters[]`, and `camera: {pos, target, fov}`. All tools mutate this document in place.
+- **Serialization:** `toJSON(scene)` should strip runtime fields (such as `_dead`, `lastSpawn`) and quantize coordinates to 1 mm, angles to 0.1°, and quaternions to 4 decimals.
+- **Loading into runtime:** To load a new or shared scene, call `sim.load(doc, false)`, `view.level.rebuild(doc.blocks)`, `view.rebuildPortals()`, `editor.emitterTool.syncMarkers()`, and `editor.history.clear()`.
+
