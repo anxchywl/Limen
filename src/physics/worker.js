@@ -114,24 +114,27 @@ function handleMessage(msg) {
       break;
     }
     case TO_WORKER.SPAWN: {
-      const inEdit = !playing && !hasSteppedSinceSnap;
+      const inEdit = !playing;
       const res = sim.spawn(msg.body, {inEdit});
       if (res.ok && !playing) postFrame({force: true});
       break;
     }
     case TO_WORKER.REMOVE: {
-      const inEdit = !playing && !hasSteppedSinceSnap;
+      const inEdit = !playing;
       if (sim.remove(msg.id, 'user', {inEdit}) && !playing) postFrame({force: true});
       break;
     }
     case TO_WORKER.EDIT: {
-      const inEdit = !playing && !hasSteppedSinceSnap;
+      const inEdit = !playing;
       if (sim.edit(msg.entity, {inEdit}) && !playing) postFrame({force: true});
       break;
     }
     case TO_WORKER.PLAY: {
       if (!playing) {
-        if (!hasSteppedSinceSnap && sim.dirtyEdit) sim.saveSnapshot();
+        if (sim.dirtyEdit) {
+          sim.saveSnapshot();
+          hasSteppedSinceSnap = false;
+        }
         playing = true;
         acc = 0;
         lastTick = performance.now();
