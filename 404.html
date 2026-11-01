@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Limen</title>
+  <script>
+    // GitHub Pages 404 handler redirecting to root with path, search, and hash preserved
+    const base = window.location.pathname.split('/').filter(Boolean)[0];
+    const isRepoPath = base && !base.includes('.');
+    // If hosted on username.github.io/repo, preserve prefix; on custom domain, redirect to /
+    const root = window.location.hostname.endsWith('github.io') && isRepoPath ? '/' + base + '/' : '/';
+    window.location.replace(root + window.location.search + window.location.hash);
+  </script>
+</head>
+<body>
+</body>
+</html>
