@@ -1,0 +1,350 @@
+{
+  "version": 1,
+  "settings": {
+    "gravity": [
+      0,
+      -9.81,
+      0
+    ],
+    "timeScale": 1,
+    "terminalSpeed": 40,
+    "quality": "auto",
+    "trails": false
+  },
+  "camera": {
+    "pos": [
+      6,
+      5,
+      6
+    ],
+    "target": [
+      0,
+      2,
+      0
+    ],
+    "fov": 65
+  },
+  "blocks": [
+    {
+      "id": "floor",
+      "kind": "box",
+      "min": [
+        -6.5,
+        -0.5,
+        -6.5
+      ],
+      "max": [
+        6.5,
+        0,
+        6.5
+      ],
+      "color": null
+    },
+    {
+      "id": "wall_nx",
+      "kind": "box",
+      "min": [
+        -6.5,
+        0,
+        -6.5
+      ],
+      "max": [
+        -6,
+        6,
+        6.5
+      ],
+      "color": null
+    },
+    {
+      "id": "wall_px",
+      "kind": "box",
+      "min": [
+        6,
+        0,
+        -6.5
+      ],
+      "max": [
+        6.5,
+        6,
+        6.5
+      ],
+      "color": null
+    },
+    {
+      "id": "wall_nz",
+      "kind": "box",
+      "min": [
+        -6,
+        0,
+        -6.5
+      ],
+      "max": [
+        6,
+        6,
+        -6
+      ],
+      "color": null
+    },
+    {
+      "id": "wall_pz",
+      "kind": "box",
+      "min": [
+        -6,
+        0,
+        6
+      ],
+      "max": [
+        6,
+        6,
+        6.5
+      ],
+      "color": null
+    }
+  ],
+  "portals": [
+    {
+      "id": "p6",
+      "pair": "p7",
+      "block": "floor",
+      "face": "+y",
+      "c": [
+        0,
+        0,
+        0
+      ],
+      "n": [
+        0,
+        1,
+        0
+      ],
+      "v": [
+        -1,
+        0,
+        0
+      ],
+      "a": 0.9,
+      "b": 1.2,
+      "color": "#3E7C8F"
+    },
+    {
+      "id": "p7",
+      "pair": "p6",
+      "block": "wall_nx",
+      "face": "+x",
+      "c": [
+        -6,
+        3,
+        0
+      ],
+      "n": [
+        1,
+        0,
+        0
+      ],
+      "v": [
+        0,
+        1,
+        0
+      ],
+      "a": 0.9,
+      "b": 1.2,
+      "color": "#3E7C8F"
+    }
+  ],
+  "bodies": [],
+  "emitters": [
+    {
+      "id": "e8",
+      "shape": "ball",
+      "size": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "pos": [
+        -5.6,
+        2.5,
+        -2
+      ],
+      "quat": [
+        0,
+        0.7071,
+        0,
+        0.7071
+      ],
+      "rate": 5,
+      "speed": 6,
+      "mass": 1,
+      "color": null
+    },
+    {
+      "id": "e9",
+      "shape": "box",
+      "size": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "pos": [
+        -5.6,
+        4,
+        2
+      ],
+      "quat": [
+        0,
+        0.7071,
+        0,
+        0.7071
+      ],
+      "rate": 5,
+      "speed": 6,
+      "mass": 1,
+      "color": null
+    },
+    {
+      "id": "e10",
+      "shape": "capsule",
+      "size": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "pos": [
+        5.6,
+        2.5,
+        -2
+      ],
+      "quat": [
+        0,
+        -0.7071,
+        0,
+        0.7071
+      ],
+      "rate": 5,
+      "speed": 6,
+      "mass": 1,
+      "color": null
+    },
+    {
+      "id": "e11",
+      "shape": "plank",
+      "size": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "pos": [
+        5.6,
+        4,
+        2
+      ],
+      "quat": [
+        0,
+        -0.7071,
+        0,
+        0.7071
+      ],
+      "rate": 5,
+      "speed": 6,
+      "mass": 1,
+      "color": null
+    },
+    {
+      "id": "e12",
+      "shape": "ball",
+      "size": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "pos": [
+        -2,
+        2.5,
+        -5.6
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "rate": 5,
+      "speed": 6,
+      "mass": 1,
+      "color": null
+    },
+    {
+      "id": "e13",
+      "shape": "box",
+      "size": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "pos": [
+        2,
+        4,
+        -5.6
+      ],
+      "quat": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "rate": 5,
+      "speed": 6,
+      "mass": 1,
+      "color": null
+    },
+    {
+      "id": "e14",
+      "shape": "capsule",
+      "size": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "pos": [
+        -2,
+        2.5,
+        5.6
+      ],
+      "quat": [
+        0,
+        1,
+        0,
+        0
+      ],
+      "rate": 5,
+      "speed": 6,
+      "mass": 1,
+      "color": null
+    },
+    {
+      "id": "e15",
+      "shape": "heavy_ball",
+      "size": [
+        0.4,
+        0.4,
+        0.4
+      ],
+      "pos": [
+        2,
+        4,
+        5.6
+      ],
+      "quat": [
+        0,
+        1,
+        0,
+        0
+      ],
+      "rate": 5,
+      "speed": 6,
+      "mass": 1,
+      "color": null
+    }
+  ],
+  "nextId": 16
+}
