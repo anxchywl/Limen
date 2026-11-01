@@ -1,8 +1,9 @@
 // Limen entry: builds the scene document, the renderer, the physics bridge,
-// camera controller, editor tools, user interface, and main render loop.
+// camera controller, editor tools, user interface, autosave, and main render loop.
+// Startup order: location.hash (#s=...) > localStorage autosave > defaultScene().
 
 import * as THREE from 'three';
-import {SHAPES, defaultScene, newId, randomBody, rng} from './core/scene.js';
+import {SHAPES, defaultScene, createScene, addBlock, newId, randomBody, rng} from './core/scene.js';
 import {teleportMaps} from './core/interp.js';
 import {createRenderer} from './render/renderer.js';
 import {createPhysicsBridge} from './physics/bridge.js';
@@ -10,6 +11,8 @@ import {createLoop} from './app/loop.js';
 import {createCameraController} from './app/camera.js';
 import {createEditor} from './editor/editor.js';
 import {createUI} from './ui/ui.js';
+import {createAutosave} from './io/autosave.js';
+import {decodeShare} from './io/share.js';
 
 const doc = defaultScene();
 const canvas = document.querySelector('#view');
@@ -42,7 +45,65 @@ const cameraCtrl = createCameraController(view.camera, canvas, doc);
 const editor = createEditor({
   doc, view, sim, cameraCtrl, setNotice,
 });
-ui = createUI({doc, view, sim, editor});
+
+const autosave = createAutosave(() => doc);
+
+function loadScene(newDoc, title) {
+  if (!newDoc) return;
+  doc.version = newDoc.version ?? 1;
+  doc.settings = {...(newDoc.settings ?? {})};
+  doc.camera = {...(newDoc.camera ?? {})};
+  doc.blocks = [...(newDoc.blocks ?? [])];
+  doc.portals = [...(newDoc.portals ?? [])];
+  doc.bodies = [...(newDoc.bodies ?? [])];
+  doc.emitters = [...(newDoc.emitters ?? [])];
+  doc.nextId = newDoc.nextId ?? 100;
+
+  sim.load(doc, false);
+  view.level.rebuild(doc.blocks);
+  view.rebuildPortals();
+  editor.emitterTool.syncMarkers();
+  editor.history.clear();
+  maps = teleportMaps(doc.portals);
+  cameraCtrl.syncPortals();
+
+  if (doc.camera.pos && doc.camera.target) {
+    view.camera.position.fromArray(doc.camera.pos);
+    cameraCtrl.controls.target.fromArray(doc.camera.target);
+    cameraCtrl.controls.update();
+  }
+
+  editor.setMode('edit');
+  ui?.update();
+  autosave.trigger();
+  if (title) setNotice(`Loaded ${title}`);
+}
+
+function newScene() {
+  if (confirm('Discard current scene and start a new empty room?')) {
+    const s = createScene();
+    const W = 6, T = 0.5, H = 6;
+    addBlock(s, {min: [-W - T, -T, -W - T], max: [W + T, 0, W + T]});
+    addBlock(s, {min: [-W - T, 0, -W - T], max: [-W, H, W + T]});
+    addBlock(s, {min: [W, 0, -W - T], max: [W + T, H, W + T]});
+    addBlock(s, {min: [-W, 0, -W - T], max: [W, H, -W]});
+    addBlock(s, {min: [-W, 0, W], max: [W, H, W + T]});
+    loadScene(s, 'empty room');
+    if (window.history?.replaceState) {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }
+}
+
+ui = createUI({
+  doc, view, sim, editor,
+  onLoadScene: loadScene,
+  onNewScene: newScene,
+});
+
+// Trigger autosave whenever document is edited
+editor.onChange(() => autosave.trigger());
+editor.history.onChange(() => autosave.trigger());
 
 let simClock = 0;
 let rec = null;
@@ -141,11 +202,62 @@ view.onRestored = () => {
   view.bodies.setBodies(sim.bodies);
 };
 
+// Startup order: location.hash (#s=...) > localStorage autosave > defaultScene()
+async function initStartupScene() {
+  if (typeof window === 'undefined') return;
+  const hash = window.location.hash;
+  if (hash && hash.startsWith('#s=')) {
+    const b64url = hash.slice(3);
+    try {
+      const res = await decodeShare(b64url);
+      if (res.ok) {
+        loadScene(res.doc, 'shared link');
+        return;
+      } else {
+        setNotice(`Invalid share link: ${res.error}`);
+      }
+    } catch (err) {
+      setNotice(`Failed to parse share link: ${err.message}`);
+    }
+  }
+
+  // Fallback to autosave
+  const saved = autosave.load();
+  if (saved) {
+    loadScene(saved, 'autosaved scene');
+    return;
+  }
+}
+
+// React to URL hash changes dynamically
+if (typeof window !== 'undefined') {
+  window.addEventListener('hashchange', async () => {
+    const hash = window.location.hash;
+    if (hash && hash.startsWith('#s=')) {
+      const b64url = hash.slice(3);
+      try {
+        const res = await decodeShare(b64url);
+        if (res.ok) {
+          loadScene(res.doc, 'shared link');
+        } else {
+          setNotice(`Invalid share link: ${res.error}`);
+        }
+      } catch (err) {
+        setNotice(`Failed to load share link: ${err.message}`);
+      }
+    }
+  });
+}
+
+initStartupScene();
 loop.start();
 
 window.limen = {
   THREE, doc, view, sim, loop, cameraCtrl, editor, ui,
   controls: cameraCtrl.controls,
+  autosave,
+  loadScene,
+  newScene,
   spawn, reset,
   flyThrough: (idx) => cameraCtrl.flyThrough(idx),
   play: () => editor.setMode('play'),

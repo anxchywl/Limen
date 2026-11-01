@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "settings": {
+    "gravity": [0, -9.81, 0],
+    "timeScale": 1,
+    "terminalSpeed": 40,
+    "quality": "auto",
+    "trails": true
+  },
+  "camera": {
+    "pos": [4.5, 3.2, 5.0],
+    "target": [0, 2.5, 0],
+    "fov": 60
+  },
+  "blocks": [
+    {"id": "floor", "kind": "box", "min": [-6.5, -0.5, -6.5], "max": [6.5, 0, 6.5], "color": null},
+    {"id": "wall_nx", "kind": "box", "min": [-6.5, 0, -6.5], "max": [-6, 6, 6.5], "color": null},
+    {"id": "wall_px", "kind": "box", "min": [6, 0, -6.5], "max": [6.5, 6, 6.5], "color": null},
+    {"id": "wall_nz", "kind": "box", "min": [-6, 0, -6.5], "max": [6, 6, -6], "color": null},
+    {"id": "wall_pz", "kind": "box", "min": [-6, 0, 6], "max": [6, 6, 6.5], "color": null},
+    {"id": "ceiling_plat", "kind": "box", "min": [-2.5, 5.2, -2.5], "max": [2.5, 5.7, 2.5], "color": "#7E5BA6"}
+  ],
+  "portals": [
+    {
+      "id": "p_floor",
+      "pair": "p_ceil",
+      "block": "floor",
+      "face": "+y",
+      "c": [0, 0, 0],
+      "n": [0, 1, 0],
+      "v": [0, 0, 1],
+      "a": 0.8,
+      "b": 0.8,
+      "color": "#3E7C8F"
+    },
+    {
+      "id": "p_ceil",
+      "pair": "p_floor",
+      "block": "ceiling_plat",
+      "face": "-y",
+      "c": [0, 5.2, 0],
+      "n": [0, -1, 0],
+      "v": [0, 0, 1],
+      "a": 0.8,
+      "b": 0.8,
+      "color": "#3E7C8F"
+    }
+  ],
+  "bodies": [
+    {
+      "id": "b_drop",
+      "shape": "ball",
+      "size": [0.5, 0.5, 0.5],
+      "pos": [0, 3.5, 0],
+      "quat": [0, 0, 0, 1],
+      "vel": [0, -2, 0],
+      "angvel": [0, 0, 0],
+      "mass": 2,
+      "color": "#D2432A"
+    }
+  ],
+  "emitters": [],
+  "nextId": 10
+}

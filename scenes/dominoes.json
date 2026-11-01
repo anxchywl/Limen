@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "settings": {
+    "gravity": [0, -9.81, 0],
+    "timeScale": 1,
+    "terminalSpeed": 40,
+    "quality": "auto",
+    "trails": false
+  },
+  "camera": {
+    "pos": [0, 4.0, 5.5],
+    "target": [-1.0, 1.0, 0],
+    "fov": 60
+  },
+  "blocks": [
+    {"id": "floor", "kind": "box", "min": [-6.5, -0.5, -6.5], "max": [6.5, 0, 6.5], "color": null},
+    {"id": "wall_nx", "kind": "box", "min": [-6.5, 0, -6.5], "max": [-6, 6, 6.5], "color": null},
+    {"id": "wall_px", "kind": "box", "min": [6, 0, -6.5], "max": [6.5, 6, 6.5], "color": null},
+    {"id": "wall_nz", "kind": "box", "min": [-6, 0, -6.5], "max": [6, 6, -6], "color": null},
+    {"id": "wall_pz", "kind": "box", "min": [-6, 0, 6], "max": [6, 6, 6.5], "color": null}
+  ],
+  "portals": [
+    {
+      "id": "p_dom_in",
+      "pair": "p_dom_out",
+      "block": "wall_nx",
+      "face": "+x",
+      "c": [-6.0, 1.2, 0],
+      "n": [1, 0, 0],
+      "v": [0, 1, 0],
+      "a": 0.7,
+      "b": 1.0,
+      "color": "#3E7C8F"
+    },
+    {
+      "id": "p_dom_out",
+      "pair": "p_dom_in",
+      "block": "wall_px",
+      "face": "-x",
+      "c": [6.0, 1.2, 0],
+      "n": [-1, 0, 0],
+      "v": [0, 1, 0],
+      "a": 0.7,
+      "b": 1.0,
+      "color": "#3E7C8F"
+    }
+  ],
+  "bodies": [
+    {"id": "b_starter", "shape": "ball", "size": [0.4, 0.4, 0.4], "pos": [-2.0, 1.4, 0], "quat": [0, 0, 0, 1], "vel": [-3.5, 0, 0], "angvel": [0, 0, 0], "mass": 2, "color": "#D2432A"},
+    {"id": "d0", "shape": "plank", "size": [0.15, 0.8, 0.4], "pos": [-2.7, 0.4, 0], "quat": [0, 0, 0, 1], "vel": [0, 0, 0], "angvel": [0, 0, 0], "mass": 1, "color": "#241D18"},
+    {"id": "d1", "shape": "plank", "size": [0.15, 0.8, 0.4], "pos": [-3.4, 0.4, 0], "quat": [0, 0, 0, 1], "vel": [0, 0, 0], "angvel": [0, 0, 0], "mass": 1, "color": "#241D18"},
+    {"id": "d2", "shape": "plank", "size": [0.15, 0.8, 0.4], "pos": [-4.1, 0.4, 0], "quat": [0, 0, 0, 1], "vel": [0, 0, 0], "angvel": [0, 0, 0], "mass": 1, "color": "#241D18"},
+    {"id": "d3", "shape": "plank", "size": [0.15, 0.8, 0.4], "pos": [-4.8, 0.4, 0], "quat": [0, 0, 0, 1], "vel": [0, 0, 0], "angvel": [0, 0, 0], "mass": 1, "color": "#241D18"},
+    {"id": "d4", "shape": "plank", "size": [0.15, 0.8, 0.4], "pos": [-5.5, 0.4, 0], "quat": [0, 0, 0, 1], "vel": [0, 0, 0], "angvel": [0, 0, 0], "mass": 1, "color": "#241D18"},
+    {"id": "d5", "shape": "plank", "size": [0.15, 0.8, 0.4], "pos": [5.2, 0.4, 0], "quat": [0, 0, 0, 1], "vel": [0, 0, 0], "angvel": [0, 0, 0], "mass": 1, "color": "#3E7C8F"},
+    {"id": "d6", "shape": "plank", "size": [0.15, 0.8, 0.4], "pos": [4.5, 0.4, 0], "quat": [0, 0, 0, 1], "vel": [0, 0, 0], "angvel": [0, 0, 0], "mass": 1, "color": "#3E7C8F"},
+    {"id": "d7", "shape": "plank", "size": [0.15, 0.8, 0.4], "pos": [3.8, 0.4, 0], "quat": [0, 0, 0, 1], "vel": [0, 0, 0], "angvel": [0, 0, 0], "mass": 1, "color": "#3E7C8F"}
+  ],
+  "emitters": [],
+  "nextId": 20
+}

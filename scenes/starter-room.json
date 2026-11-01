@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "settings": {
+    "gravity": [0, -9.81, 0],
+    "timeScale": 1,
+    "terminalSpeed": 40,
+    "quality": "auto",
+    "trails": false
+  },
+  "camera": {
+    "pos": [5.4, 7.4, 5.6],
+    "target": [-1, 0.4, -1.2],
+    "fov": 60
+  },
+  "blocks": [
+    {"id": "floor", "kind": "box", "min": [-6.5, -0.5, -6.5], "max": [6.5, 0, 6.5], "color": null},
+    {"id": "wall_nx", "kind": "box", "min": [-6.5, 0, -6.5], "max": [-6, 6, 6.5], "color": null},
+    {"id": "wall_px", "kind": "box", "min": [6, 0, -6.5], "max": [6.5, 6, 6.5], "color": null},
+    {"id": "wall_nz", "kind": "box", "min": [-6, 0, -6.5], "max": [6, 6, -6], "color": null},
+    {"id": "wall_pz", "kind": "box", "min": [-6, 0, 6], "max": [6, 6, 6.5], "color": null},
+    {"id": "plat_step", "kind": "box", "min": [2, 0, -1], "max": [4.5, 0.75, 2.5], "color": null},
+    {"id": "ramp_wood", "kind": "ramp", "pos": [-1.5, 0.5, 3.5], "size": [3, 1, 2], "rot": [0, 0, 0, 1], "color": null}
+  ],
+  "portals": [
+    {
+      "id": "p_start_a",
+      "pair": "p_start_b",
+      "block": "floor",
+      "face": "+y",
+      "c": [-3.8, 0, -0.8],
+      "n": [0, 1, 0],
+      "v": [-1, 0, 0],
+      "a": 0.7,
+      "b": 1.0,
+      "color": "#3E7C8F"
+    },
+    {
+      "id": "p_start_b",
+      "pair": "p_start_a",
+      "block": "wall_nx",
+      "face": "+x",
+      "c": [-6.0, 2.2, -0.8],
+      "n": [1, 0, 0],
+      "v": [0, 1, 0],
+      "a": 0.7,
+      "b": 1.0,
+      "color": "#3E7C8F"
+    }
+  ],
+  "bodies": [
+    {"id": "b_starter_box", "shape": "box", "size": [0.55, 0.55, 0.55], "pos": [-3.8, 0.5, -0.8], "quat": [0, 0, 0, 1], "vel": [0, 0, 0], "angvel": [0, 0, 0], "mass": 1, "color": "#D2432A"},
+    {"id": "b_starter_ball", "shape": "ball", "size": [0.5, 0.5, 0.5], "pos": [3.2, 1.2, 0.8], "quat": [0, 0, 0, 1], "vel": [0, 0, 0], "angvel": [0, 0, 0], "mass": 1, "color": "#C27A40"},
+    {"id": "b_starter_cap", "shape": "capsule", "size": [0.35, 0.9, 0.35], "pos": [-1.5, 1.4, 3.5], "quat": [0, 0, 0, 1], "vel": [0, 0, 0], "angvel": [0, 0, 0], "mass": 1, "color": "#7E5BA6"}
+  ],
+  "emitters": [],
+  "nextId": 10
+}

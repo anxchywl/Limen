@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "settings": {
+    "gravity": [0, -9.81, 0],
+    "timeScale": 1,
+    "terminalSpeed": 40,
+    "quality": "auto",
+    "trails": false
+  },
+  "camera": {
+    "pos": [-2.0, 3.5, 4.5],
+    "target": [-5.5, 1.8, 0],
+    "fov": 60
+  },
+  "blocks": [
+    {"id": "floor", "kind": "box", "min": [-6.5, -0.5, -6.5], "max": [6.5, 0, 6.5], "color": null},
+    {"id": "wall_nx", "kind": "box", "min": [-6.5, 0, -6.5], "max": [-6, 6, 6.5], "color": null},
+    {"id": "wall_px", "kind": "box", "min": [6, 0, -6.5], "max": [6.5, 6, 6.5], "color": null},
+    {"id": "wall_nz", "kind": "box", "min": [-6, 0, -6.5], "max": [6, 6, -6], "color": null},
+    {"id": "wall_pz", "kind": "box", "min": [-6, 0, 6], "max": [6, 6, 6.5], "color": null}
+  ],
+  "portals": [
+    {
+      "id": "p_stack_a",
+      "pair": "p_stack_b",
+      "block": "wall_nx",
+      "face": "+x",
+      "c": [-6.0, 2.0, 0],
+      "n": [1, 0, 0],
+      "v": [0, 1, 0],
+      "a": 0.7,
+      "b": 1.2,
+      "color": "#3E7C8F"
+    },
+    {
+      "id": "p_stack_b",
+      "pair": "p_stack_a",
+      "block": "wall_px",
+      "face": "-x",
+      "c": [6.0, 2.0, 0],
+      "n": [-1, 0, 0],
+      "v": [0, 1, 0],
+      "a": 0.7,
+      "b": 1.2,
+      "color": "#3E7C8F"
+    }
+  ],
+  "bodies": [
+    {"id": "b_s0", "shape": "box", "size": [0.6, 0.5, 0.6], "pos": [-5.9, 0.25, 0], "quat": [0, 0, 0, 1], "vel": [0, 0, 0], "angvel": [0, 0, 0], "mass": 2, "color": "#D2432A"},
+    {"id": "b_s1", "shape": "box", "size": [0.6, 0.5, 0.6], "pos": [-5.9, 0.75, 0], "quat": [0, 0, 0, 1], "vel": [0, 0, 0], "angvel": [0, 0, 0], "mass": 2, "color": "#C27A40"},
+    {"id": "b_s2", "shape": "box", "size": [0.6, 0.5, 0.6], "pos": [-5.9, 1.25, 0], "quat": [0, 0, 0, 1], "vel": [0, 0, 0], "angvel": [0, 0, 0], "mass": 2, "color": "#7E5BA6"},
+    {"id": "b_s3", "shape": "box", "size": [0.6, 0.5, 0.6], "pos": [-5.9, 1.75, 0], "quat": [0, 0, 0, 1], "vel": [0, 0, 0], "angvel": [0, 0, 0], "mass": 2, "color": "#5E9A4E"},
+    {"id": "b_s4", "shape": "box", "size": [0.6, 0.5, 0.6], "pos": [-5.9, 2.25, 0], "quat": [0, 0, 0, 1], "vel": [0, 0, 0], "angvel": [0, 0, 0], "mass": 2, "color": "#3E7C8F"},
+    {"id": "b_s5", "shape": "box", "size": [0.6, 0.5, 0.6], "pos": [-5.9, 2.75, 0], "quat": [0, 0, 0, 1], "vel": [0, 0, 0], "angvel": [0, 0, 0], "mass": 2, "color": "#F2C79B"}
+  ],
+  "emitters": [],
+  "nextId": 10
+}

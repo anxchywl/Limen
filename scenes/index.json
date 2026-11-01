@@ -1,0 +1,50 @@
+[
+  {
+    "id": "endless-fall",
+    "title": "Endless Fall",
+    "description": "Continuous terminal-speed free fall between aligned floor and high wall/ceiling portals.",
+    "file": "scenes/endless-fall.json"
+  },
+  {
+    "id": "fling",
+    "title": "High Fling",
+    "description": "Dropping into a floor portal launches a ball high out of a raised, angled exit.",
+    "file": "scenes/fling.json"
+  },
+  {
+    "id": "ball-loop",
+    "title": "Perpetual Ball Loop",
+    "description": "An emitter continuously feeds balls down a ramp into a floor portal looping back.",
+    "file": "scenes/ball-loop.json"
+  },
+  {
+    "id": "wall-stack",
+    "title": "Portal Straddle",
+    "description": "A tall stack of boxes resting half-way through an upright wall portal.",
+    "file": "scenes/wall-stack.json"
+  },
+  {
+    "id": "corridor",
+    "title": "Recursive Corridor",
+    "description": "Two portals facing each other on opposite walls creating an infinite recursive mirror.",
+    "file": "scenes/corridor.json"
+  },
+  {
+    "id": "staircase",
+    "title": "Portal Staircase",
+    "description": "A tiered series of stepped platforms connected through portal links.",
+    "file": "scenes/staircase.json"
+  },
+  {
+    "id": "dominoes",
+    "title": "Domino Run",
+    "description": "A chain of domino planks that topple into a portal and emerge continuing on the other side.",
+    "file": "scenes/dominoes.json"
+  },
+  {
+    "id": "starter-room",
+    "title": "Sandbox Starter",
+    "description": "An open room with platforms, a ramp, and one linked portal pair ready for sandbox building.",
+    "file": "scenes/starter-room.json"
+  }
+]

@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "settings": {
+    "gravity": [0, -9.81, 0],
+    "timeScale": 1,
+    "terminalSpeed": 40,
+    "quality": "auto",
+    "trails": false
+  },
+  "camera": {
+    "pos": [0, 5.0, 6.5],
+    "target": [0, 1.5, 0],
+    "fov": 60
+  },
+  "blocks": [
+    {"id": "floor", "kind": "box", "min": [-6.5, -0.5, -6.5], "max": [6.5, 0, 6.5], "color": null},
+    {"id": "wall_nx", "kind": "box", "min": [-6.5, 0, -6.5], "max": [-6, 6, 6.5], "color": null},
+    {"id": "wall_px", "kind": "box", "min": [6, 0, -6.5], "max": [6.5, 6, 6.5], "color": null},
+    {"id": "wall_nz", "kind": "box", "min": [-6, 0, -6.5], "max": [6, 6, -6], "color": null},
+    {"id": "wall_pz", "kind": "box", "min": [-6, 0, 6], "max": [6, 6, 6.5], "color": null},
+    {"id": "step1", "kind": "box", "min": [-4.5, 0, -2.5], "max": [-1.0, 1.2, 2.5], "color": "#E4DCCF"},
+    {"id": "step2", "kind": "box", "min": [1.0, 0, -2.5], "max": [4.5, 2.5, 2.5], "color": "#C8BEAF"}
+  ],
+  "portals": [
+    {
+      "id": "p_step1",
+      "pair": "p_step2",
+      "block": "step1",
+      "face": "+y",
+      "c": [-2.5, 1.2, 0],
+      "n": [0, 1, 0],
+      "v": [1, 0, 0],
+      "a": 0.7,
+      "b": 1.0,
+      "color": "#3E7C8F"
+    },
+    {
+      "id": "p_step2",
+      "pair": "p_step1",
+      "block": "step2",
+      "face": "+y",
+      "c": [2.5, 2.5, 0],
+      "n": [0, 1, 0],
+      "v": [1, 0, 0],
+      "a": 0.7,
+      "b": 1.0,
+      "color": "#3E7C8F"
+    }
+  ],
+  "bodies": [
+    {"id": "b_walker", "shape": "ball", "size": [0.5, 0.5, 0.5], "pos": [-2.5, 2.5, 0], "quat": [0, 0, 0, 1], "vel": [0, -1, 0], "angvel": [0, 0, 0], "mass": 1, "color": "#D2432A"}
+  ],
+  "emitters": [],
+  "nextId": 10
+}

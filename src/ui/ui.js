@@ -1,14 +1,20 @@
 // Master UI coordinator: mounts top bar, tool rail, inspector, settings,
-// help modal, mobile context menu, and floating toast notices.
+// help modal, gallery modal, mobile context menu, file drag-and-drop, and toast notices.
 
 import {createTopBar} from './topbar.js';
 import {createToolRail} from './rail.js';
 import {createInspector} from './inspector.js';
 import {createSettingsModal} from './settings.js';
 import {createHelpModal} from './help.js';
+import {createGalleryModal} from './gallery.js';
 import {createContextMenu} from './contextmenu.js';
+import {setupDropZone, openFilePicker, saveFile} from '../io/file.js';
+import {copyShareLink} from '../io/share.js';
 
-export function createUI({doc, view, sim, editor}) {
+export function createUI({
+  doc, view, sim, editor,
+  onLoadScene, onNewScene,
+}) {
   let root = document.querySelector('#limen-ui');
   if (!root) {
     root = document.createElement('div');
@@ -34,6 +40,13 @@ export function createUI({doc, view, sim, editor}) {
   // Modals
   const settingsModal = createSettingsModal({container: root, doc, view, sim});
   const helpModal = createHelpModal({container: root});
+  const galleryModal = createGalleryModal({
+    container: root,
+    onLoadScene(newDoc, title) {
+      onLoadScene?.(newDoc, title);
+    },
+    setNotice: showNotice,
+  });
 
   // Top bar
   const topbar = createTopBar({
@@ -43,6 +56,35 @@ export function createUI({doc, view, sim, editor}) {
     editor,
     onOpenSettings: () => settingsModal.open(),
     onOpenHelp: () => helpModal.open(),
+    onOpenGallery: () => galleryModal.open(),
+    async onShare() {
+      try {
+        const res = await copyShareLink(doc);
+        if (res.copied) {
+          showNotice(res.warning ? `Link copied! ${res.warning}` : 'Share link copied to clipboard!');
+        } else {
+          prompt('Copy share URL:', res.url);
+        }
+      } catch (err) {
+        showNotice(`Failed to share: ${err.message}`);
+      }
+    },
+    onOpenFile() {
+      openFilePicker(
+        (newDoc, name) => {
+          onLoadScene?.(newDoc, name);
+          showNotice(`Opened ${name}`);
+        },
+        (err) => showNotice(err)
+      );
+    },
+    onSaveFile() {
+      saveFile(doc, 'scene.limen.json');
+      showNotice('Saved scene.limen.json');
+    },
+    onNewScene() {
+      onNewScene?.();
+    },
   });
 
   // Tool rail
@@ -69,10 +111,21 @@ export function createUI({doc, view, sim, editor}) {
     inspector,
   });
 
+  // Setup file drag-and-drop on the canvas
+  setupDropZone(
+    view.renderer.domElement,
+    (newDoc, name) => {
+      onLoadScene?.(newDoc, name);
+      showNotice(`Loaded ${name}`);
+    },
+    (err) => showNotice(err)
+  );
+
   return {
     showNotice,
     settingsModal,
     helpModal,
+    galleryModal,
     inspector,
     update() {
       topbar.update();

@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "settings": {
+    "gravity": [0, -9.81, 0],
+    "timeScale": 1,
+    "terminalSpeed": 40,
+    "quality": "auto",
+    "trails": true
+  },
+  "camera": {
+    "pos": [1.5, 4.5, 7.5],
+    "target": [0, 2.0, 0],
+    "fov": 60
+  },
+  "blocks": [
+    {"id": "floor", "kind": "box", "min": [-6.5, -0.5, -6.5], "max": [6.5, 0, 6.5], "color": null},
+    {"id": "wall_nx", "kind": "box", "min": [-6.5, 0, -6.5], "max": [-6, 6, 6.5], "color": null},
+    {"id": "wall_px", "kind": "box", "min": [6, 0, -6.5], "max": [6.5, 6, 6.5], "color": null},
+    {"id": "wall_nz", "kind": "box", "min": [-6, 0, -6.5], "max": [6, 6, -6], "color": null},
+    {"id": "wall_pz", "kind": "box", "min": [-6, 0, 6], "max": [6, 6, 6.5], "color": null},
+    {"id": "drop_tower", "kind": "box", "min": [-5.5, 0, -2], "max": [-2.5, 4.0, 2], "color": "#8C7F73"}
+  ],
+  "portals": [
+    {
+      "id": "p_entry",
+      "pair": "p_exit",
+      "block": "floor",
+      "face": "+y",
+      "c": [-4.0, 0, 0],
+      "n": [0, 1, 0],
+      "v": [1, 0, 0],
+      "a": 0.7,
+      "b": 1.0,
+      "color": "#3E7C8F"
+    },
+    {
+      "id": "p_exit",
+      "pair": "p_entry",
+      "block": "wall_px",
+      "face": "-x",
+      "c": [6.0, 2.8, 0],
+      "n": [-1, 0, 0],
+      "v": [0, 1, 0],
+      "a": 0.7,
+      "b": 1.0,
+      "color": "#3E7C8F"
+    }
+  ],
+  "bodies": [
+    {
+      "id": "b_fling",
+      "shape": "ball",
+      "size": [0.5, 0.5, 0.5],
+      "pos": [-4.0, 3.8, 0],
+      "quat": [0, 0, 0, 1],
+      "vel": [0, -1, 0],
+      "angvel": [0, 0, 0],
+      "mass": 10,
+      "color": "#2A272A"
+    }
+  ],
+  "emitters": [],
+  "nextId": 10
+}

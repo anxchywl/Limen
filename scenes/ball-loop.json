@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "settings": {
+    "gravity": [0, -9.81, 0],
+    "timeScale": 1,
+    "terminalSpeed": 40,
+    "quality": "auto",
+    "trails": false
+  },
+  "camera": {
+    "pos": [4.5, 6.0, 6.0],
+    "target": [-0.5, 1.5, -0.5],
+    "fov": 60
+  },
+  "blocks": [
+    {"id": "floor", "kind": "box", "min": [-6.5, -0.5, -6.5], "max": [6.5, 0, 6.5], "color": null},
+    {"id": "wall_nx", "kind": "box", "min": [-6.5, 0, -6.5], "max": [-6, 6, 6.5], "color": null},
+    {"id": "wall_px", "kind": "box", "min": [6, 0, -6.5], "max": [6.5, 6, 6.5], "color": null},
+    {"id": "wall_nz", "kind": "box", "min": [-6, 0, -6.5], "max": [6, 6, -6], "color": null},
+    {"id": "wall_pz", "kind": "box", "min": [-6, 0, 6], "max": [6, 6, 6.5], "color": null},
+    {"id": "ramp_lead", "kind": "ramp", "pos": [0, 0.75, 1.8], "size": [3.0, 1.5, 2.0], "rot": [0, 0, 0, 1], "color": null}
+  ],
+  "portals": [
+    {
+      "id": "p_loop_floor",
+      "pair": "p_loop_wall",
+      "block": "floor",
+      "face": "+y",
+      "c": [-2.0, 0, -1.5],
+      "n": [0, 1, 0],
+      "v": [-1, 0, 0],
+      "a": 0.7,
+      "b": 1.0,
+      "color": "#3E7C8F"
+    },
+    {
+      "id": "p_loop_wall",
+      "pair": "p_loop_floor",
+      "block": "wall_nx",
+      "face": "+x",
+      "c": [-6.0, 3.2, 0.5],
+      "n": [1, 0, 0],
+      "v": [0, 1, 0],
+      "a": 0.7,
+      "b": 1.0,
+      "color": "#3E7C8F"
+    }
+  ],
+  "bodies": [],
+  "emitters": [
+    {
+      "id": "e_feed",
+      "shape": "ball",
+      "size": [0.45, 0.45, 0.45],
+      "pos": [0, 3.2, 2.5],
+      "quat": [0, 0, 0, 1],
+      "rate": 2,
+      "speed": 3,
+      "mass": 1,
+      "color": null
+    }
+  ],
+  "nextId": 10
+}

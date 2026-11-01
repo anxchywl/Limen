@@ -1,7 +1,10 @@
 // Top bar: mode toggle (Edit/Play), step button, time scale, undo/redo, reset,
-// body count against 300 cap, settings button, and help button.
+// IO buttons (Gallery, Share, Open, Save, New), body badge, settings, and help.
 
-export function createTopBar({container, doc, sim, editor, onOpenSettings, onOpenHelp}) {
+export function createTopBar({
+  container, doc, sim, editor,
+  onOpenSettings, onOpenHelp, onOpenGallery, onShare, onOpenFile, onSaveFile, onNewScene,
+}) {
   const bar = document.createElement('div');
   bar.className = 'limen-topbar';
 
@@ -23,6 +26,13 @@ export function createTopBar({container, doc, sim, editor, onOpenSettings, onOpe
       </div>
     </div>
     <div class="topbar-right">
+      <div class="io-group">
+        <button id="btn-gallery" class="btn btn-secondary" title="Example scenes">Gallery</button>
+        <button id="btn-share" class="btn btn-secondary" title="Copy share link (hash)">Share</button>
+        <button id="btn-open" class="btn btn-secondary" title="Open scene file">Open</button>
+        <button id="btn-save" class="btn btn-secondary" title="Save scene file">Save</button>
+        <button id="btn-new" class="btn btn-secondary" title="New empty room">New</button>
+      </div>
       <div class="history-group">
         <button id="btn-undo" class="btn btn-icon" title="Undo (Cmd+Z)">↶</button>
         <button id="btn-redo" class="btn btn-icon" title="Redo (Cmd+Shift+Z)">↷</button>
@@ -48,6 +58,11 @@ export function createTopBar({container, doc, sim, editor, onOpenSettings, onOpe
   const badge = bar.querySelector('#body-count-badge');
   const btnSettings = bar.querySelector('#btn-settings');
   const btnHelp = bar.querySelector('#btn-help');
+  const btnGallery = bar.querySelector('#btn-gallery');
+  const btnShare = bar.querySelector('#btn-share');
+  const btnOpen = bar.querySelector('#btn-open');
+  const btnSave = bar.querySelector('#btn-save');
+  const btnNew = bar.querySelector('#btn-new');
   const scaleBtns = bar.querySelectorAll('[data-scale]');
 
   btnMode.onclick = () => editor.toggleMode();
@@ -57,6 +72,11 @@ export function createTopBar({container, doc, sim, editor, onOpenSettings, onOpe
   btnReset.onclick = () => editor.reset();
   btnSettings.onclick = () => onOpenSettings?.();
   btnHelp.onclick = () => onOpenHelp?.();
+  btnGallery.onclick = () => onOpenGallery?.();
+  btnShare.onclick = () => onShare?.();
+  btnOpen.onclick = () => onOpenFile?.();
+  btnSave.onclick = () => onSaveFile?.();
+  btnNew.onclick = () => onNewScene?.();
 
   scaleBtns.forEach((btn) => {
     btn.onclick = () => {
