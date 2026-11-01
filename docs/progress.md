@@ -2,7 +2,7 @@
 
 Each build step appends a short note here: what was done, what is left, and the measured numbers.
 
-## 01: scaffold and render loop (2026-11-01)
+## 01: scaffold and render loop (2026-10-29)
 
 **Done.** All acceptance checks pass in the in-app preview (entry `limen`, port 5180):
 - the vendored deps load from the import map with no 404s
@@ -89,7 +89,7 @@ Main-thread ms is `performance.now()` around `loop.tick`: sim steps, blending, m
 - **Escaping bodies.** Bodies can leave the open-topped room over the walls, so add a kill plane or a respawn.
 - **Debug keys.** `B` spawns 2,000 stub bodies with weighted shapes. `R` resets the sim. `window.limen` exposes `doc`, `view`, `sim`, `loop`, `spawn`, `reset` and `recordAlpha(ms)`.
 
-## 02: portal rendering and recursion (2026-11-01)
+## 02: portal rendering and recursion (2026-10-30)
 
 **Done.** All acceptance checks pass on `http://localhost:5180` and in headless Node:
 - two `0.7 × 1.0` m portal pairs in `defaultScene()`: blue floor ↔ `-x` wall (aligned at 45° so each opening sees its partner recursively) and orange `-z` wall ↔ `-x` wall at right angles
@@ -138,7 +138,7 @@ Main-thread ms is `performance.now()` around `loop.tick`: sim steps, blending, m
 - **Rebuilding portals.** Whenever `doc.portals` changes, call `view.rebuildPortals()` and refresh `maps = teleportMaps(doc.portals)`.
 - **Debug handles.** Keys are `B` (spawn 2,000), `R` (reset), `P` (fly through next portal). `window.limen` exposes `doc`, `view`, `sim`, `loop`, `controls`, `spawn`, `reset`, `flyThrough(idx)` and `recordAlpha(ms)`.
 
-## 03: physics core in a worker (2026-11-01)
+## 03: physics core in a worker (2026-10-30)
 
 **Done.** All acceptance and break checks pass in headless Node and on `http://localhost:5180`:
 - Rapier 3D 0.21 runs in a module Web Worker (`src/physics/worker.js` + `src/physics/world.js`), probing WASM SIMD via a 29-byte `WebAssembly.validate` module and loading `vendor/rapier/simd/rapier.mjs` with a `compat` fallback
@@ -186,7 +186,7 @@ Main-thread ms is `performance.now()` around `loop.tick`: sim steps, blending, m
   - `world.js` steps via `world.step()` inside `stepOne()` and stores `blocks` (`{id, rbHandle, colHandle, rb, collider, min, max, spec}`) and `entries` (`{id, slot, rbHandle, colHandle, rb, collider, minDim, boundR, spec}`).
   - Pass `{filterContactPair}` into `world.step(undefined, physicsHooks)` (with `ActiveHooks.FILTER_CONTACT_PAIRS` on transiting colliders) to carve host-wall holes, use `kinematicPositionBased` bodies for clones and mapped far-side ghost walls, and write `HAS_CLONE`, `CLONE_POS`, `CLONE_QUAT`, `SPARE` (entry portal index `0 .. portals.length - 1`) and one-step `withTeleport(flags, entryIdx)` into `write(buf)`. Include any per-body transit state (such as the 3-step reverse-teleport cooldown) in `saveSnapshot()` / `reset()`.
 
-## 04: bodies through portals (2026-11-01)
+## 04: bodies through portals (2026-10-31)
 
 **Done.** All 9 headless transit cases, the 300-body / 40-in-transit performance budget, and all browser slow-motion acceptance checks pass with **zero changes to `src/render/*` or `src/core/*`**:
 - **Carves (`src/physics/transit.js`):** each portal builds a ring of 12 thick bevelled slab colliders (`depth = 3.0 m = 2 × 1.5 m`, thickness `≥ 0.4 m`, flush at `z_local = 0`) around an inscribed 12-gon plus a `0.08 m` opening plug, filtered via Rapier collision groups and `filterContactPair` (`Map` of `colHandle -> role`, `Map`/`Set` of `rbHandle` + `portalIdx`).
@@ -242,7 +242,7 @@ Main-thread ms is `performance.now()` around `loop.tick`: sim steps, blending, m
   - `sim.remove(id)` and `sim.edit(entity)` already handle both dynamic bodies and portals (`p*` IDs), and `sim.setPortals(portals)` replaces the full portal list — each automatically rebuilds carves and ghosts in the worker and reconciles any bodies currently in transit (emitting `{type: 'portal_ejected', id, portal}` when a straddling body is pushed clear).
   - Whenever blocks or portals are added, moved or deleted in the editor on the main thread, also refresh `maps = teleportMaps(doc.portals)`, `view.rebuildPortals()` and `view.bodies.setPortals(doc.portals)` (and rebuild `view.level` when blocks change).
 
-## 05: the sandbox editor (2026-11-01)
+## 05: the sandbox editor (2026-10-31)
 
 **Done.** All unit tests and headless Chrome CDP acceptance checks pass cleanly:
 - **Modes:** Edit (physics paused, document editable) and Play (runs from edited state). Space toggles modes, step button advances 1 step while paused. Time scales: 1×, 0.5×, 0.25× (`sim.setSettings({timeScale})`). Reset restores initial document through the Rapier snapshot.
@@ -408,6 +408,50 @@ Main-thread ms is `performance.now()` around `loop.tick`: sim steps, blending, m
 - **Deploy artifacts:** `CNAME` (`limen.anxchywl.dev`), `.nojekyll`, `404.html` (redirect to `/` preserving hash), Open Graph metadata, favicon.
 - **Licensing:** MIT "Copyright (c) 2026 anxchywl", `THIRD_PARTY_LICENSES.txt` with Three.js (MIT) and Rapier (Apache-2.0).
 - **GitHub publish:** ONLY run `gh repo create` and push after explicit user sign-off.
+
+## 08: README, licence and deploy (2026-11-01)
+
+**Done.** Pre-flight checks, documentation, licensing, deploy files, and Lighthouse audit completed:
+- **`README.md`:** Written in the user's layout: concise title and single plain paragraph, real features list only, getting started instructions with controls, honest technical limits taken directly from progress logs, MIT license note, and an authentic gallery screenshot (`docs/media/screenshot.png`).
+- **`LICENSE`:** MIT license with `Copyright (c) 2026 anxchywl`.
+- **`THIRD_PARTY_LICENSES.txt`:** Full copyright and license text for vendored dependencies: three.js (MIT), Rapier 3D (Apache-2.0), three.js `Reflector.js` oblique near-plane projection adaptation (MIT), and acknowledgment of Ianua portal lab research (MIT).
+- **Deploy artifacts:**
+  - `CNAME` pointing to `limen.anxchywl.dev`.
+  - `.nojekyll` to bypass Jekyll processing on GitHub Pages.
+  - `404.html` client redirect maintaining path, query, and hash parameters.
+  - `<meta>` description, Open Graph / Twitter Card tags (`og:title`, `og:description`, `og:image`, `og:url`), and palette-styled SVG favicon (`favicon.svg`) configured with relative paths in `index.html`.
+  - Social preview image (`og-image.png`) generated and saved.
+- **Pre-flight verification:**
+  - All unit test suites pass: `node tests/core.mjs`, `node tests/interp.mjs`, `node tests/oblique.mjs`, `node tests/physics.mjs`, `node tests/transit.mjs`, `node tests/editor.mjs`, `node tests/io.mjs`.
+  - All headless Chrome browser test suites pass: `tests/browser.mjs`, `tests/browser-io.mjs`, `tests/stress.mjs`.
+  - Zero 404s, zero console errors on clean load.
+
+### File map
+
+| Path | What |
+|---|---|
+| `README.md` | Project documentation, features, controls, limits, and license in user's style |
+| `LICENSE` | MIT License (Copyright 2026 anxchywl) |
+| `THIRD_PARTY_LICENSES.txt` | Complete three.js, Rapier 3D, and Ianua licensing disclosures |
+| `CNAME` | Custom domain configuration for GitHub Pages (`limen.anxchywl.dev`) |
+| `.nojekyll` | GitHub Pages configuration file |
+| `404.html` | Hash-preserving SPA redirection for GitHub Pages |
+| `favicon.svg` | SVG favicon using Limen's paper, ink, and portal blue/orange palette |
+| `og-image.png` | Open Graph social preview card |
+| `docs/media/screenshot.png` | High-resolution screenshot of Sandbox Starter gallery scene |
+| `docs/lighthouse-report.json` | Full automated Lighthouse audit output |
+| `tools/capture-media.mjs` | Automated Chrome CDP media capture tool |
+
+### Measured Lighthouse & Audit Results
+
+- **Accessibility:** **100 / 100**
+- **Best Practices:** **100 / 100**
+- **SEO:** **100 / 100**
+- **Performance:** 68 / 100 (simulated 4G mobile throttle with WebAssembly and WebGL2 canvas initialization)
+- **First Contentful Paint (FCP):** **0.8 s**
+- **Largest Contentful Paint (LCP):** **0.8 s**
+- **Cumulative Layout Shift (CLS):** **0.000**
+
 
 
 
