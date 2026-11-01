@@ -302,3 +302,67 @@ Main-thread ms is `performance.now()` around `loop.tick`: sim steps, blending, m
 - **Serialization:** `toJSON(scene)` should strip runtime fields (such as `_dead`, `lastSpawn`) and quantize coordinates to 1 mm, angles to 0.1°, and quaternions to 4 decimals.
 - **Loading into runtime:** To load a new or shared scene, call `sim.load(doc, false)`, `view.level.rebuild(doc.blocks)`, `view.rebuildPortals()`, `editor.emitterTool.syncMarkers()`, and `editor.history.clear()`.
 
+## 06: save, load and share (2026-11-01)
+
+**Done.** All serialization, validation, share link, file IO, autosave, and gallery acceptance checks pass in Node and headless Chrome:
+- **Serialization (`src/io/serialize.js`):** `toJSON(scene)` strips runtime physics/render fields (`_dead`, `lastSpawn`), quantizes coordinates and sizes to 1 mm, quaternions/normals to 4 decimals, and angular/linear velocities and masses to 2 decimals. Round-trip serialization preserves scene document fields identically.
+- **Validation (`src/io/validate.js`):** Untrusted input hardening: checks payload size (≤ 1 MB), rejects prototype pollution keys (`__proto__`, `constructor`, `prototype`), enforces `version: 1`, validates finite numbers (rejects `NaN`, `Infinity`, bad types), clamps limits (≤ 100 blocks, ≤ 8 portals / 4 pairs, ≤ 300 bodies, ≤ 8 emitters), verifies ID uniqueness across the document, and checks portal partner link references. Rejects 12 hostile test payloads.
+- **Share Link (`src/io/share.js`):** Compresses JSON with native `CompressionStream('deflate-raw')` and encodes to `base64url` into `location.hash = '#s=...'`. Length check warns if > 8 KB (all gallery scenes range from 606 to 746 bytes, < 10% of budget). Clipboard copy with input prompt fallback. Dynamic `hashchange` listener reloads scenes without page reload.
+- **File IO (`src/io/file.js`):** Download scene as `.limen.json`, open through file picker, and drag-and-drop `.json` / `.limen.json` directly onto the canvas.
+- **Autosave (`src/io/autosave.js`):** Debounced 1 s persistence to `localStorage['limen_autosave_scene']` wrapped in `try/catch`. Reloading the page cleanly restores the autosaved scene. Handled gracefully when `localStorage` is disabled or throws `QuotaExceededError`.
+- **Startup Order (`src/main.js`):** `location.hash` (`#s=...`) > `localStorage` autosave > `defaultScene()`.
+- **Gallery (`scenes/*.json` + `scenes/index.json` + `src/ui/gallery.js`):** Hand-built 8 example scenes:
+  1. `endless-fall`: Continuous terminal-speed free fall between aligned floor and ceiling portals
+  2. `fling`: High platform drop into floor portal launching out of a raised wall portal
+  3. `ball-loop`: Perpetual ball loop machine with emitter, ramp, and recirculating portals
+  4. `wall-stack`: Stack of 6 boxes resting half-way through an upright wall portal
+  5. `corridor`: Recursive corridor with two portal pairs facing each other
+  6. `staircase`: Stepped platforms connected through portal links
+  7. `dominoes`: Domino planks toppling into a portal and continuing out partner portal
+  8. `starter-room`: Clean room with platforms, ramp, and linked portal pair
+  All gallery scenes load in **1.7 ms to 11.0 ms** (well under the 300 ms budget).
+- **UI:** Added Gallery, Share, Open, Save, and New buttons to the topbar with clean paper-and-ink styling.
+
+`node tests/core.mjs`, `node tests/interp.mjs`, `node tests/oblique.mjs`, `node tests/physics.mjs`, `node tests/transit.mjs`, `node tests/editor.mjs`, `node tests/browser.mjs`, `node tests/io.mjs` and `node tests/browser-io.mjs` all pass.
+
+### File map
+
+| Path | What |
+|---|---|
+| `src/io/serialize.js` | `cleanScene(scene)`, `toJSON(scene, indent)`, `fromJSON(text)`: pure document serialization with 1 mm / 4-decimal quantization |
+| `src/io/validate.js` | Schema validator: prototype-pollution guards, 1 MB limit, version 1 check, finite numbers, bounds clamping, ID uniqueness, portal link checks |
+| `src/io/share.js` | `encodeShare`, `decodeShare`, `buildShareUrl`, `copyShareLink`: `CompressionStream('deflate-raw')` + base64url, 8 KB warning |
+| `src/io/file.js` | `saveFile`, `openFilePicker`, `setupDropZone`: `.limen.json` file download, file picker, canvas drag-and-drop |
+| `src/io/autosave.js` | Debounced 1 s localStorage persistence with try/catch quota error resilience |
+| `src/ui/gallery.js` | Example scenes modal browsing `scenes/index.json` with one-click load |
+| `scenes/index.json` | Catalog metadata for the 8 example scenes |
+| `scenes/*.json` | 8 hand-built showcase scenes: `endless-fall`, `fling`, `ball-loop`, `wall-stack`, `corridor`, `staircase`, `dominoes`, `starter-room` |
+| `src/ui/topbar.js` | Added Gallery, Share, Open, Save, New buttons |
+| `src/main.js` | Startup order (`hash > autosave > default`), `hashchange` listener, `newScene()` with confirm dialog |
+| `tests/io.mjs` | Node test suite: serialization round-trip, gallery compressed sizes, 12 hostile validation checks |
+| `tests/browser-io.mjs` | Chrome CDP suite: share link in URL hash, 5s play reproducibility, gallery scene loads (< 300 ms), hostile hash safety (< 100 ms freeze), autosave reload |
+
+### Measured (Apple Silicon Mac, Node v26 + Chrome Headless Metal WebGL2, DPR 2)
+
+| Scene | Raw JSON size | Compressed base64url | Load time in browser | Budget |
+|---|---|---|---|---|
+| `endless-fall` | 1,628 B | **606 B** | 10.3 ms | ≤ 8 KB, < 300 ms |
+| `fling` | 1,626 B | **614 B** | 11.0 ms | ≤ 8 KB, < 300 ms |
+| `ball-loop` | 1,656 B | **616 B** | 6.4 ms | ≤ 8 KB, < 300 ms |
+| `wall-stack` | 2,359 B | **656 B** | 2.3 ms | ≤ 8 KB, < 300 ms |
+| `corridor` | 2,024 B | **663 B** | 3.8 ms | ≤ 8 KB, < 300 ms |
+| `staircase` | 1,668 B | **608 B** | 3.4 ms | ≤ 8 KB, < 300 ms |
+| `dominoes` | 2,890 B | **698 B** | 2.3 ms | ≤ 8 KB, < 300 ms |
+| `starter-room` | 2,092 B | **746 B** | 1.7 ms | ≤ 8 KB, < 300 ms |
+
+- **Hostile URL hash:** corrupt/oversized payload leaves active scene intact, freeze **2.80 ms** (≤ 100 ms budget).
+- **Autosave:** restores byte-identical document on reload; storage failure handled with 0 uncaught errors.
+- **5s Play simulation reproducibility on shared link:** identical physics motion and step count across reload.
+
+### For prompt 07 (Performance hardening and stress tests)
+
+- **Worker frame header timing:** Prompt 07 adds worker step time and transit time to the frame header spare fields (`protocol.js` and `world.js`).
+- **Adaptive quality:** Reads EMA of frame time against 16.7 ms target and scales DPR (down to 0.5), shadow map, recursion depth, and view budget.
+- **Stress scenes:** Place scripted 60 s scenarios (`pile`, `mirrors`) under `tests/stress/*.json` loadable via `?stress=name`.
+
+
