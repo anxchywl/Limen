@@ -56,6 +56,6 @@ const server = http.createServer((req, res) => {
   res.end(data);
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Limen dev server listening on http://localhost:${PORT} (0.0.0.0) with zero-caching`);
+server.listen(PORT, () => {
+  console.log(`Limen dev server listening on http://localhost:${PORT} with zero-caching`);
 });

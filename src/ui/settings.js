@@ -52,7 +52,7 @@ export function createSettingsModal({container, doc, view, sim, quality, perfOve
         <div class="setting-row" style="margin-top: 14px; border-top: 1px solid var(--paper-border); padding-top: 12px;">
           <label class="setting-label">Diagnostics:</label>
           <div style="display: flex; gap: 8px;">
-            <button id="toggle-perf-btn" class="btn btn-secondary">Stats Overlay (\`)</button>
+            <button id="toggle-perf-btn" class="btn btn-secondary">Stats Overlay (&#96;)</button>
             <button id="chaos-btn" class="btn btn-danger">Chaos Test</button>
           </div>
         </div>

@@ -8,6 +8,6 @@ for (const p of ports) {
       res.end();
     });
     s.on('error', () => {});
-    s.listen(p, '0.0.0.0', () => console.log(`Redirecting port ${p} -> http://localhost:5180`));
+    s.listen(p, () => console.log(`Redirecting port ${p} -> http://localhost:5180`));
   } catch (_) {}
 }
