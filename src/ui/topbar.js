@@ -1,5 +1,5 @@
-// Top bar: mode toggle (Edit/Play), step button, time scale, undo/redo, reset,
-// IO buttons (Gallery, Share, Open, Save, New), body badge, settings, and help.
+// Top bar: floating control pill with mode toggle (Edit/Play), step button,
+// time scale, quick actions (Gallery, Share, Reset), body badge, history, and overflow menu.
 
 export function createTopBar({
   container, doc, sim, editor,
@@ -11,40 +11,60 @@ export function createTopBar({
   bar.innerHTML = `
     <div class="topbar-left">
       <span class="limen-logo">LIMEN</span>
+      <div class="topbar-sep"></div>
       <div class="mode-toggle">
         <button id="btn-mode" class="btn btn-primary" title="Toggle Edit/Play (Space)">
           <span class="icon">▶</span> <span class="label">Play</span>
         </button>
-        <button id="btn-step" class="btn btn-secondary" title="Advance 1 step (.)">
-          <span class="icon">⏯</span> Step
+        <button id="btn-step" class="btn btn-icon btn-secondary" title="Advance 1 step (.)">
+          <span class="icon">⏭</span>
         </button>
       </div>
       <div class="timescale-group">
-        <button class="btn btn-pill" data-scale="1">1×</button>
-        <button class="btn btn-pill" data-scale="0.5">0.5×</button>
-        <button class="btn btn-pill" data-scale="0.25">0.25×</button>
+        <button class="btn btn-pill" data-scale="1" title="Normal speed">1×</button>
+        <button class="btn btn-pill" data-scale="0.5" title="Half speed">0.5×</button>
+        <button class="btn btn-pill" data-scale="0.25" title="Quarter speed">0.25×</button>
       </div>
     </div>
-    <div class="topbar-right">
+
+    <div class="topbar-center">
       <div class="io-group">
-        <button id="btn-gallery" class="btn btn-secondary" title="Example scenes">Gallery</button>
-        <button id="btn-share" class="btn btn-secondary" title="Copy share link (hash)">Share</button>
-        <button id="btn-open" class="btn btn-secondary" title="Open scene file">Open</button>
-        <button id="btn-save" class="btn btn-secondary" title="Save scene file">Save</button>
-        <button id="btn-new" class="btn btn-secondary" title="New empty room">New</button>
+        <button id="btn-gallery" class="btn btn-secondary btn-pill" title="Browse example scenes">
+          <span class="icon">✦</span> <span>Gallery</span>
+        </button>
+        <button id="btn-share" class="btn btn-secondary btn-pill" title="Copy shareable link">
+          <span class="icon">↗</span> <span>Share</span>
+        </button>
+        <button id="btn-reset" class="btn btn-secondary btn-pill" title="Reset scene to initial state (R)">
+          <span class="icon">↺</span> <span>Reset</span>
+        </button>
       </div>
+    </div>
+
+    <div class="topbar-right">
       <div class="history-group">
-        <button id="btn-undo" class="btn btn-icon" title="Undo (Cmd+Z)">↶</button>
-        <button id="btn-redo" class="btn btn-icon" title="Redo (Cmd+Shift+Z)">↷</button>
+        <button id="btn-undo" class="btn btn-icon btn-secondary" title="Undo (Cmd+Z)">↶</button>
+        <button id="btn-redo" class="btn btn-icon btn-secondary" title="Redo (Cmd+Shift+Z)">↷</button>
       </div>
-      <button id="btn-reset" class="btn btn-secondary" title="Reset to edited snapshot (R)">
-        Reset
-      </button>
+
       <div id="body-count-badge" class="body-badge" title="Bodies / 300 max">
         ${doc.bodies.length} / 300
       </div>
-      <button id="btn-settings" class="btn btn-icon" title="Settings">⚙</button>
-      <button id="btn-help" class="btn btn-icon" title="Keyboard help (?)">?</button>
+
+      <div class="topbar-sep"></div>
+
+      <button id="btn-settings" class="btn btn-icon btn-secondary" title="Simulation & Rendering Settings">⚙</button>
+      <button id="btn-help" class="btn btn-icon btn-secondary" title="Keyboard & Controls Help (?)">?</button>
+
+      <!-- Overflow dropdown for File operations -->
+      <div class="more-menu-wrapper">
+        <button id="btn-more" class="btn btn-icon btn-secondary" title="More options (File I/O)">•••</button>
+        <div class="more-menu-dropdown" id="topbar-dropdown" style="display: none;">
+          <button id="btn-new" class="dropdown-item"><span>➕ New Empty Scene</span></button>
+          <button id="btn-open" class="dropdown-item"><span>📁 Open Scene File…</span></button>
+          <button id="btn-save" class="dropdown-item"><span>💾 Save Scene File</span></button>
+        </div>
+      </div>
     </div>
   `;
 
@@ -63,6 +83,8 @@ export function createTopBar({
   const btnOpen = bar.querySelector('#btn-open');
   const btnSave = bar.querySelector('#btn-save');
   const btnNew = bar.querySelector('#btn-new');
+  const btnMore = bar.querySelector('#btn-more');
+  const dropdown = bar.querySelector('#topbar-dropdown');
   const scaleBtns = bar.querySelectorAll('[data-scale]');
 
   btnMode.onclick = () => editor.toggleMode();
@@ -74,9 +96,31 @@ export function createTopBar({
   btnHelp.onclick = () => onOpenHelp?.();
   btnGallery.onclick = () => onOpenGallery?.();
   btnShare.onclick = () => onShare?.();
-  btnOpen.onclick = () => onOpenFile?.();
-  btnSave.onclick = () => onSaveFile?.();
-  btnNew.onclick = () => onNewScene?.();
+
+  btnMore.onclick = (e) => {
+    e.stopPropagation();
+    const isShown = dropdown.style.display !== 'none';
+    dropdown.style.display = isShown ? 'none' : 'flex';
+  };
+
+  btnOpen.onclick = () => {
+    dropdown.style.display = 'none';
+    onOpenFile?.();
+  };
+  btnSave.onclick = () => {
+    dropdown.style.display = 'none';
+    onSaveFile?.();
+  };
+  btnNew.onclick = () => {
+    dropdown.style.display = 'none';
+    onNewScene?.();
+  };
+
+  document.addEventListener('click', (e) => {
+    if (!bar.contains(e.target)) {
+      dropdown.style.display = 'none';
+    }
+  });
 
   scaleBtns.forEach((btn) => {
     btn.onclick = () => {
@@ -89,7 +133,7 @@ export function createTopBar({
   function update() {
     const isPlay = editor.mode === 'play';
     btnMode.innerHTML = isPlay
-      ? '<span class="icon">⏸</span> <span class="label">Edit</span>'
+      ? '<span class="icon">⏸</span> <span class="label">Pause</span>'
       : '<span class="icon">▶</span> <span class="label">Play</span>';
     btnMode.classList.toggle('active', isPlay);
     btnStep.disabled = isPlay;

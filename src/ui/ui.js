@@ -28,6 +28,18 @@ export function createUI({
   toastEl.className = 'limen-toast';
   root.appendChild(toastEl);
 
+  // Floating controls HUD helper
+  const hudHint = document.createElement('div');
+  hudHint.className = 'limen-hud-hint';
+  hudHint.innerHTML = `
+    <span class="hud-item"><kbd>WASD</kbd> Move</span>
+    <span class="hud-sep">·</span>
+    <span class="hud-item">Drag to Orbit</span>
+    <span class="hud-sep">·</span>
+    <span class="hud-item"><kbd>Space</kbd> Play</span>
+  `;
+  root.appendChild(hudHint);
+
   let toastTimer = 0;
   function showNotice(text, ms = 2500) {
     toastEl.textContent = text;

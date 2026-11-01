@@ -77,13 +77,16 @@ export function createCameraController(threeCamera, canvas, doc) {
       initFlyState();
       try {
         if (document.pointerLockElement !== canvas) {
-          canvas.requestPointerLock?.();
+          const p = canvas.requestPointerLock?.();
+          if (p && typeof p.catch === 'function') p.catch(() => {});
         }
       } catch (_) {}
     } else {
       mode = 'orbit';
       if (document.pointerLockElement === canvas) {
-        document.exitPointerLock?.();
+        try {
+          document.exitPointerLock?.();
+        } catch (_) {}
       }
       controls.enabled = true;
       if (flyState) {
@@ -125,20 +128,21 @@ export function createCameraController(threeCamera, canvas, doc) {
   function onPointerDown(e) {
     if (mode === 'fly' && e.button === 0) {
       if (document.pointerLockElement !== canvas) {
-        canvas.requestPointerLock?.();
+        try {
+          const p = canvas.requestPointerLock?.();
+          if (p && typeof p.catch === 'function') p.catch(() => {});
+        } catch (_) {}
       }
     }
   }
 
   function onKeyDown(e) {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) return;
     if (e.code === 'KeyF' && !e.ctrlKey && !e.metaKey && !e.altKey) {
       toggleMode();
       return;
     }
-    if (mode === 'fly') {
-      keysDown.add(e.code);
-    }
+    keysDown.add(e.code);
   }
 
   function onKeyUp(e) {
@@ -258,12 +262,76 @@ export function createCameraController(threeCamera, canvas, doc) {
       return;
     }
 
-    // Orbit mode
+    // Orbit mode: continuous WASD / QE / Arrow translation
+    const hasMoveKeys = keysDown.has('KeyW') || keysDown.has('KeyS') ||
+                        keysDown.has('KeyA') || keysDown.has('KeyD') ||
+                        keysDown.has('KeyQ') || keysDown.has('KeyE') ||
+                        keysDown.has('KeyC') ||
+                        keysDown.has('ArrowUp') || keysDown.has('ArrowDown') ||
+                        keysDown.has('ArrowLeft') || keysDown.has('ArrowRight');
+
+    if (hasMoveKeys) {
+      const isShift = keysDown.has('ShiftLeft') || keysDown.has('ShiftRight');
+      const speed = (isShift ? 9.5 : 4.5) * dt;
+
+      const pos = threeCamera.position.toArray();
+      const target = controls.target.toArray();
+      let fwd = sub(target, pos);
+      const fwdLen = Math.hypot(fwd[0], fwd[1], fwd[2]);
+      if (fwdLen > 1e-4) {
+        fwd = [fwd[0] / fwdLen, fwd[1] / fwdLen, fwd[2] / fwdLen];
+      } else {
+        fwd = [0, 0, -1];
+      }
+
+      const worldUp = [0, 1, 0];
+      let right = cross(fwd, worldUp);
+      let rLen = Math.hypot(right[0], right[1], right[2]);
+      if (rLen < 1e-3) {
+        right = cross(fwd, [0, 0, 1]);
+        rLen = Math.hypot(right[0], right[1], right[2]);
+      }
+      if (rLen > 1e-4) {
+        right = [right[0] / rLen, right[1] / rLen, right[2] / rLen];
+      } else {
+        right = [1, 0, 0];
+      }
+
+      let step = [0, 0, 0];
+      if (keysDown.has('KeyW') || keysDown.has('ArrowUp')) step = madd(step, fwd, 1);
+      if (keysDown.has('KeyS') || keysDown.has('ArrowDown')) step = madd(step, fwd, -1);
+      if (keysDown.has('KeyD') || keysDown.has('ArrowRight')) step = madd(step, right, 1);
+      if (keysDown.has('KeyA') || keysDown.has('ArrowLeft')) step = madd(step, right, -1);
+      if (keysDown.has('KeyE')) step = madd(step, worldUp, 1);
+      if (keysDown.has('KeyQ') || keysDown.has('KeyC')) step = madd(step, worldUp, -1);
+
+      const sLen = Math.hypot(step[0], step[1], step[2]);
+      if (sLen > 1e-4) {
+        const factor = speed / sLen;
+        const dx = step[0] * factor;
+        const dy = step[1] * factor;
+        const dz = step[2] * factor;
+
+        threeCamera.position.x += dx;
+        threeCamera.position.y += dy;
+        threeCamera.position.z += dz;
+        controls.target.x += dx;
+        controls.target.y += dy;
+        controls.target.z += dz;
+      }
+    }
+
     controls.update();
     const curRaw = threeCamera.position.toArray();
     const bounded = keepInside(curRaw);
     if (bounded[0] !== curRaw[0] || bounded[1] !== curRaw[1] || bounded[2] !== curRaw[2]) {
+      const bx = bounded[0] - curRaw[0];
+      const by = bounded[1] - curRaw[1];
+      const bz = bounded[2] - curRaw[2];
       threeCamera.position.fromArray(bounded);
+      controls.target.x += bx;
+      controls.target.y += by;
+      controls.target.z += bz;
     }
     const cur = threeCamera.position.toArray();
 
@@ -272,9 +340,18 @@ export function createCameraController(threeCamera, canvas, doc) {
       const P = framedPortals[i];
       if (crossing(P, P, lastCamPos, cur) !== null && maps[i]) {
         const nextPos = apply(maps[i], cur);
-        const nextTarget = apply(maps[i], controls.target.toArray());
+        const curTarget = controls.target.toArray();
+        const curFwd = norm(sub(curTarget, cur));
+        const mappedFwd = norm(applyDir(maps[i], curFwd));
+        const dist = Math.max(1.5, Math.hypot(curTarget[0] - cur[0], curTarget[1] - cur[1], curTarget[2] - cur[2]));
+        const nextTarget = [
+          nextPos[0] + mappedFwd[0] * dist,
+          nextPos[1] + mappedFwd[1] * dist,
+          nextPos[2] + mappedFwd[2] * dist,
+        ];
         threeCamera.position.fromArray(nextPos);
         controls.target.fromArray(nextTarget);
+        threeCamera.up.set(0, 1, 0);
         controls.update();
         lastCamPos = threeCamera.position.toArray();
         return;

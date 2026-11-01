@@ -1,5 +1,5 @@
-// Tool rail: left vertical rail on desktop, bottom bar on phones.
-// Includes contextual sub-options panel for active tool settings.
+// Tool rail: floating bottom dock with active tool options chip.
+// Features 6 primary tools with hotkeys (1-6) and sub-option chip panel.
 
 import {PORTAL_COLOURS} from '../core/scene.js';
 
@@ -8,35 +8,41 @@ export function createToolRail({container, doc, editor}) {
   rail.className = 'limen-rail';
 
   rail.innerHTML = `
+    <!-- Contextual sub-options drawer (floats above the dock) -->
+    <div class="rail-subpanel" id="rail-subpanel"></div>
+
     <div class="rail-tools">
-      <button class="rail-btn" data-tool="select" title="Select (1)">
+      <button class="rail-btn" data-tool="select" title="Select & Transform (1)">
         <span class="icon">↖</span>
         <span class="text">Select</span>
+        <kbd class="hotkey">1</kbd>
       </button>
-      <button class="rail-btn" data-tool="block" title="Block (2)">
+      <button class="rail-btn" data-tool="block" title="Place Static Blocks (2)">
         <span class="icon">⬚</span>
         <span class="text">Block</span>
+        <kbd class="hotkey">2</kbd>
       </button>
-      <button class="rail-btn" data-tool="portal" title="Portal (3)">
+      <button class="rail-btn" data-tool="portal" title="Place Linked Portals (3)">
         <span class="icon portal-swatch">○</span>
         <span class="text">Portal</span>
+        <kbd class="hotkey">3</kbd>
       </button>
-      <button class="rail-btn" data-tool="spawn" title="Spawn (4)">
+      <button class="rail-btn" data-tool="spawn" title="Spawn Dynamic Bodies (4)">
         <span class="icon">✦</span>
         <span class="text">Spawn</span>
+        <kbd class="hotkey">4</kbd>
       </button>
-      <button class="rail-btn" data-tool="emitter" title="Emitter (5)">
+      <button class="rail-btn" data-tool="emitter" title="Continuous Particle Emitter (5)">
         <span class="icon">⊚</span>
         <span class="text">Emitter</span>
+        <kbd class="hotkey">5</kbd>
       </button>
-      <button class="rail-btn" data-tool="delete" title="Delete (6)">
+      <button class="rail-btn" data-tool="delete" title="Delete Objects (6)">
         <span class="icon">✕</span>
         <span class="text">Delete</span>
+        <kbd class="hotkey">6</kbd>
       </button>
     </div>
-
-    <!-- Contextual sub-options drawer -->
-    <div class="rail-subpanel" id="rail-subpanel"></div>
   `;
 
   container.appendChild(rail);
@@ -77,9 +83,9 @@ export function createToolRail({container, doc, editor}) {
       const pending = editor.portalTool.pending;
       subpanel.innerHTML = `
         <div class="subpanel-row">
-          <span class="subpanel-title">Portal Pair:</span>
+          <span class="subpanel-title">Pair:</span>
           <span class="color-dot" style="background: ${color}"></span>
-          <span class="subpanel-hint">${pending ? 'Click face for Portal B' : 'Click face for Portal A'}</span>
+          <span class="subpanel-hint">${pending ? 'Click wall for Portal B' : 'Click wall for Portal A'}</span>
         </div>
       `;
       subpanel.style.display = 'flex';
@@ -95,10 +101,11 @@ export function createToolRail({container, doc, editor}) {
           <button class="btn btn-pill ${curShape === 'plank' ? 'active' : ''}" data-shape="plank">Plank</button>
           <button class="btn btn-pill ${curShape === 'heavy_ball' ? 'active' : ''}" data-shape="heavy_ball">Heavy</button>
         </div>
+        <div class="subpanel-sep"></div>
         <div class="subpanel-row">
           <span class="subpanel-title">Size:</span>
           <input type="range" id="spawn-scale" min="0.5" max="2.0" step="0.1" value="${curScale}">
-          <span id="spawn-scale-val">${curScale.toFixed(1)}×</span>
+          <span id="spawn-scale-val" class="subpanel-val">${curScale.toFixed(1)}×</span>
         </div>
       `;
       subpanel.querySelectorAll('[data-shape]').forEach((b) => {
@@ -125,13 +132,14 @@ export function createToolRail({container, doc, editor}) {
           <button class="btn btn-pill ${curShape === 'box' ? 'active' : ''}" data-eshape="box">Box</button>
           <button class="btn btn-pill ${curShape === 'heavy_ball' ? 'active' : ''}" data-eshape="heavy_ball">Heavy</button>
         </div>
+        <div class="subpanel-sep"></div>
         <div class="subpanel-row">
           <span class="subpanel-title">Rate:</span>
           <input type="range" id="emitter-rate" min="1" max="5" step="0.5" value="${curRate}">
-          <span id="emitter-rate-val">${curRate}/s</span>
-          <span class="subpanel-title" style="margin-left: 8px">Speed:</span>
+          <span id="emitter-rate-val" class="subpanel-val">${curRate}/s</span>
+          <span class="subpanel-title" style="margin-left: 6px">Speed:</span>
           <input type="range" id="emitter-speed" min="1" max="10" step="1" value="${curSpeed}">
-          <span id="emitter-speed-val">${curSpeed} m/s</span>
+          <span id="emitter-speed-val" class="subpanel-val">${curSpeed} m/s</span>
         </div>
       `;
       subpanel.querySelectorAll('[data-eshape]').forEach((b) => {
