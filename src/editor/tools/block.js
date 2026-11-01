@@ -7,7 +7,7 @@ import {newId} from '../../core/scene.js';
 const GRID = 0.5;
 const snap = (v) => Math.round(v / GRID) * GRID;
 
-export function createBlockTool({doc, view, sim, history, setNotice}) {
+export function createBlockTool({doc, view, sim, history, cameraCtrl, setNotice}) {
   let kind = 'box'; // 'box' | 'ramp' | 'pillar'
   let dragging = false;
   let startPt = null;
@@ -62,6 +62,7 @@ export function createBlockTool({doc, view, sim, history, setNotice}) {
     const hit = raycastFloorOrLevel(ray);
     if (!hit) return;
 
+    if (cameraCtrl?.controls) cameraCtrl.controls.enabled = false;
     dragging = true;
     startPt = [snap(hit.point.x), snap(hit.point.y), snap(hit.point.z)];
     currentPt = [...startPt];
@@ -99,6 +100,7 @@ export function createBlockTool({doc, view, sim, history, setNotice}) {
   }
 
   function onPointerUp() {
+    if (cameraCtrl?.controls) cameraCtrl.controls.enabled = true;
     if (!dragging) return;
     dragging = false;
     previewMesh.visible = false;

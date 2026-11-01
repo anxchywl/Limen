@@ -76,8 +76,22 @@ export function createEmitterTool({doc, view, sim, history, setNotice}) {
     return hit ? {pos: [hit.x, hit.y, hit.z], normal} : null;
   }
 
+  let downRay = null;
+
   function onPointerDown(e, ray) {
     if (e.button !== 0) return;
+    downRay = ray;
+  }
+
+  function onPointerUp(e, ray, wasClick) {
+    if (!wasClick) {
+      downRay = null;
+      return;
+    }
+    const targetRay = downRay || ray;
+    downRay = null;
+    if (!targetRay) return;
+
     doc.emitters ??= [];
     const chk = canAddEmitter(doc);
     if (!chk.ok) {
@@ -85,7 +99,7 @@ export function createEmitterTool({doc, view, sim, history, setNotice}) {
       return;
     }
 
-    const hit = raycastSurface(ray);
+    const hit = raycastSurface(targetRay);
     if (!hit) return;
 
     // Emitter pos is 0.4 m off the surface, pointing outward along normal
@@ -207,6 +221,7 @@ export function createEmitterTool({doc, view, sim, history, setNotice}) {
     setRate: (r) => { rate = Math.min(5, Math.max(0.5, r)); },
     setSpeed: (s) => { speed = Math.max(1, s); },
     onPointerDown,
+    onPointerUp,
     tick,
     syncMarkers,
     dispose,

@@ -104,41 +104,80 @@ export function createSpawnTool({doc, view, sim, history, setNotice}) {
     return body;
   }
 
+  let isDown = false;
+  let didSpray = false;
+  let sprayDelayTimer = 0;
+
   function onPointerDown(e, ray) {
     if (e.button !== 0) return;
     lastRay = ray;
-    spraying = true;
+    isDown = true;
+    didSpray = false;
     sprayBatch = [];
 
-    const first = spawnOne(ray);
-    if (first) sprayBatch.push(first);
-
-    sprayTimer = setInterval(() => {
-      if (!spraying || !lastRay) return;
-      const chk = canAddBody(doc);
-      if (!chk.ok || sim.count >= getLimits().maxBodies) {
-        clearInterval(sprayTimer);
-        setNotice?.(chk.reason || `body limit reached (${getLimits().maxBodies})`);
-        return;
-      }
-      const b = spawnOne(lastRay);
-      if (b) sprayBatch.push(b);
-    }, SPRAY_INTERVAL_MS);
-  }
-
-  function onPointerMove(e, ray) {
-    lastRay = ray;
-  }
-
-  function onPointerUp() {
-    if (!spraying) return;
-    spraying = false;
+    // Only start spray after holding down still for 300 ms without dragging camera
+    clearTimeout(sprayDelayTimer);
     clearInterval(sprayTimer);
+    sprayDelayTimer = setTimeout(() => {
+      if (!isDown || !lastRay) return;
+      didSpray = true;
+      spraying = true;
+      const first = spawnOne(lastRay);
+      if (first) sprayBatch.push(first);
 
-    if (sprayBatch.length > 0) {
+      sprayTimer = setInterval(() => {
+        if (!spraying || !lastRay) return;
+        const chk = canAddBody(doc);
+        if (!chk.ok || sim.count >= getLimits().maxBodies) {
+          clearInterval(sprayTimer);
+          setNotice?.(chk.reason || `body limit reached (${getLimits().maxBodies})`);
+          return;
+        }
+        const b = spawnOne(lastRay);
+        if (b) sprayBatch.push(b);
+      }, SPRAY_INTERVAL_MS);
+    }, 300);
+  }
+
+  function onPointerMove(e, ray, isDragCamera) {
+    lastRay = ray;
+    if (isDragCamera) {
+      // User is dragging camera to orbit: cancel any pending or active spray
+      clearTimeout(sprayDelayTimer);
+      clearInterval(sprayTimer);
+      spraying = false;
+    }
+  }
+
+  function onPointerUp(e, ray, wasClick) {
+    clearTimeout(sprayDelayTimer);
+    clearInterval(sprayTimer);
+    isDown = false;
+    spraying = false;
+
+    if (wasClick && !didSpray) {
+      // Intentional tap / click: spawn exactly one body
+      const first = spawnOne(ray || lastRay);
+      if (first) {
+        history.execute({
+          name: `spawn_${shape}`,
+          execute() {
+            if (!doc.bodies.some((x) => x.id === first.id)) {
+              doc.bodies.push(first);
+              sim.spawn(first);
+            }
+          },
+          undo() {
+            const idx = doc.bodies.findIndex((x) => x.id === first.id);
+            if (idx >= 0) doc.bodies.splice(idx, 1);
+            sim.remove(first.id);
+          },
+        });
+      }
+    } else if (didSpray && sprayBatch.length > 0) {
       const batch = [...sprayBatch];
       history.execute({
-        name: `spawn_${batch.length > 1 ? 'spray' : shape}`,
+        name: 'spawn_spray',
         execute() {
           for (const b of batch) {
             if (!doc.bodies.some((x) => x.id === b.id)) {
@@ -157,6 +196,7 @@ export function createSpawnTool({doc, view, sim, history, setNotice}) {
       });
     }
     sprayBatch = [];
+    didSpray = false;
   }
 
   function dispose() {

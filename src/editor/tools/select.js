@@ -333,14 +333,28 @@ export function createSelectTool({doc, view, sim, history, cameraCtrl, onSelecti
     return hitEntity;
   }
 
+  let downRay = null;
+
   function onPointerDown(e, ray) {
     if (isDragging) return;
-    const hit = pick(ray);
-    if (hit) {
-      select(hit);
-    } else {
-      deselect();
+    downRay = ray;
+  }
+
+  function onPointerUp(e, ray, wasClick) {
+    if (isDragging) return;
+    // Only select / deselect on clean click, not when dragging/orbiting the camera
+    if (wasClick) {
+      const targetRay = downRay || ray;
+      if (targetRay) {
+        const hit = pick(targetRay);
+        if (hit) {
+          select(hit);
+        } else {
+          deselect();
+        }
+      }
     }
+    downRay = null;
   }
 
   function dispose() {
@@ -357,6 +371,7 @@ export function createSelectTool({doc, view, sim, history, cameraCtrl, onSelecti
     pick,
     setMode,
     onPointerDown,
+    onPointerUp,
     updatePose: () => updateDummyFromEntity(selected),
     dispose,
   };

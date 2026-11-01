@@ -153,11 +153,67 @@ export function createCameraController(threeCamera, canvas, doc) {
     keysDown.clear();
   }
 
+  function onWheel(e) {
+    // If ctrlKey is true, it's trackpad pinch-to-zoom: let OrbitControls handle dolly/zoom
+    if (e.ctrlKey) return;
+
+    // Detect discrete mouse wheel step vs trackpad continuous glide:
+    // Physical mouse wheels usually emit deltaMode === 1 (lines) or deltaX === 0 and large integer deltaY (>= 100)
+    const isPhysicalMouseWheel = (e.deltaMode === 1) ||
+      (e.deltaX === 0 && Number.isInteger(e.deltaY) && Math.abs(e.deltaY) >= 100);
+
+    if (isPhysicalMouseWheel) return;
+
+    // Trackpad 2-finger gesture: rotate or pan
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (mode === 'orbit') {
+      if (e.shiftKey) {
+        // Shift + 2-finger: Pan view
+        const panSpeed = 0.0035;
+        const targetVec = controls.target.toArray();
+        const posVec = threeCamera.position.toArray();
+        let lookDir = sub(targetVec, posVec);
+        const lookLen = Math.hypot(lookDir[0], lookDir[1], lookDir[2]);
+        if (lookLen > 1e-4) lookDir = [lookDir[0] / lookLen, lookDir[1] / lookLen, lookDir[2] / lookLen];
+        else lookDir = [0, 0, -1];
+
+        const upVec = [0, 1, 0];
+        let right = cross(lookDir, upVec);
+        let rLen = Math.hypot(right[0], right[1], right[2]);
+        if (rLen > 1e-4) right = [right[0] / rLen, right[1] / rLen, right[2] / rLen];
+        else right = [1, 0, 0];
+
+        const dx = -e.deltaX * panSpeed;
+        const dy = e.deltaY * panSpeed;
+
+        threeCamera.position.x += right[0] * dx + upVec[0] * dy;
+        threeCamera.position.y += right[1] * dx + upVec[1] * dy;
+        threeCamera.position.z += right[2] * dx + upVec[2] * dy;
+        controls.target.x += right[0] * dx + upVec[0] * dy;
+        controls.target.y += right[1] * dx + upVec[1] * dy;
+        controls.target.z += right[2] * dx + upVec[2] * dy;
+      } else {
+        // 2-finger swipe: Orbit camera smoothly
+        const rotSpeed = 0.0035;
+        controls.rotateLeft(-e.deltaX * rotSpeed);
+        controls.rotateUp(-e.deltaY * rotSpeed);
+        controls.update();
+      }
+    } else if (mode === 'fly' && flyState) {
+      const rotSpeed = 0.0025;
+      const right = norm(cross(flyState.fwd, flyState.up));
+      flyState.fwd = norm(madd(madd(flyState.fwd, right, -e.deltaX * rotSpeed), flyState.up, -e.deltaY * rotSpeed));
+    }
+  }
+
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
   window.addEventListener('blur', onBlur);
   canvas.addEventListener('pointermove', onPointerMove);
   canvas.addEventListener('pointerdown', onPointerDown);
+  canvas.addEventListener('wheel', onWheel, {passive: false, capture: true});
 
   function flyThrough(idx = (nextPortalIdx++) % Math.max(1, doc.portals.length)) {
     const p = doc.portals[idx];
@@ -366,6 +422,7 @@ export function createCameraController(threeCamera, canvas, doc) {
     window.removeEventListener('blur', onBlur);
     canvas.removeEventListener('pointermove', onPointerMove);
     canvas.removeEventListener('pointerdown', onPointerDown);
+    canvas.removeEventListener('wheel', onWheel, {capture: true});
     controls.dispose();
   }
 

@@ -98,12 +98,21 @@ export function createDeleteTool({doc, view, sim, history, selectTool, setNotice
     }
   }
 
+  let downRay = null;
+
   function onPointerDown(e, ray) {
     if (e.button !== 0) return;
-    const hit = selectTool?.pick(ray);
-    if (hit) {
-      deleteEntity(hit);
+    downRay = ray;
+  }
+
+  function onPointerUp(e, ray, wasClick) {
+    if (wasClick && (downRay || ray)) {
+      const hit = selectTool?.pick(downRay || ray);
+      if (hit) {
+        deleteEntity(hit);
+      }
     }
+    downRay = null;
   }
 
   function deleteSelected() {
@@ -117,5 +126,6 @@ export function createDeleteTool({doc, view, sim, history, selectTool, setNotice
     deleteEntity,
     deleteSelected,
     onPointerDown,
+    onPointerUp,
   };
 }

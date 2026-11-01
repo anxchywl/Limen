@@ -180,6 +180,8 @@ export function createPortalTool({doc, view, sim, history, setNotice}) {
     return null;
   }
 
+  let pendingPlaceRay = null;
+
   function onPointerDown(e, ray) {
     if (e.button !== 0) return;
 
@@ -191,7 +193,11 @@ export function createPortalTool({doc, view, sim, history, setNotice}) {
       return;
     }
 
-    // Otherwise, place a portal
+    // Otherwise record ray for potential placement on click
+    pendingPlaceRay = ray;
+  }
+
+  function placePortalAtRay(ray) {
     const hit = raycastFaces(ray);
     if (!hit) {
       setNotice?.('click on a flat face of static geometry');
@@ -273,7 +279,7 @@ export function createPortalTool({doc, view, sim, history, setNotice}) {
           view.rebuildPortals();
           sim.remove(pb.id);
           sim.remove(pa.id);
-          setNotice?.('undid portal pair placement');
+          setNotice?.('removed portal pair');
         },
       });
     }
@@ -300,7 +306,7 @@ export function createPortalTool({doc, view, sim, history, setNotice}) {
     }
   }
 
-  function onPointerUp() {
+  function onPointerUp(e, ray, wasClick) {
     if (draggingPortal && dragStartPose) {
       const portal = draggingPortal;
       const startC = [...dragStartPose.c];
@@ -332,7 +338,10 @@ export function createPortalTool({doc, view, sim, history, setNotice}) {
       }
       draggingPortal = null;
       dragStartPose = null;
+    } else if (wasClick && (pendingPlaceRay || ray)) {
+      placePortalAtRay(pendingPlaceRay || ray);
     }
+    pendingPlaceRay = null;
   }
 
   function dispose() {

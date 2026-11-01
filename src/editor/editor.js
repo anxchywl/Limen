@@ -40,7 +40,7 @@ export function createEditor({doc, view, sim, cameraCtrl, setNotice}) {
   });
 
   const blockTool = createBlockTool({
-    doc, view, sim, history, setNotice,
+    doc, view, sim, history, cameraCtrl, setNotice,
   });
 
   const portalTool = createPortalTool({
@@ -121,27 +121,52 @@ export function createEditor({doc, view, sim, cameraCtrl, setNotice}) {
   // Pointer event listeners on canvas
   const canvas = view.renderer.domElement;
 
+  let pointerDownPos = null;
+  let pointerDownRay = null;
+  let isDragCamera = false;
+  const DRAG_THRESHOLD_PX = 5;
+
   function onPointerDown(e) {
     if (cameraCtrl.mode === 'fly') return;
-    // If clicking on UI or not primary/secondary button
     if (e.target !== canvas) return;
-    const ray = getRay(e);
+    if (e.button !== 0) return; // Only primary button for tool actions
+
+    pointerDownPos = {x: e.clientX, y: e.clientY};
+    pointerDownRay = getRay(e);
+    isDragCamera = false;
+
     const tool = tools[activeToolName];
-    tool?.onPointerDown?.(e, ray);
+    tool?.onPointerDown?.(e, pointerDownRay);
   }
 
   function onPointerMove(e) {
     if (cameraCtrl.mode === 'fly') return;
     if (e.target !== canvas) return;
+    if (pointerDownPos) {
+      const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+      if (dist > DRAG_THRESHOLD_PX) {
+        isDragCamera = true;
+      }
+    }
     const ray = getRay(e);
     const tool = tools[activeToolName];
-    tool?.onPointerMove?.(e, ray);
+    tool?.onPointerMove?.(e, ray, isDragCamera);
   }
 
   function onPointerUp(e) {
     if (cameraCtrl.mode === 'fly') return;
     const tool = tools[activeToolName];
-    tool?.onPointerUp?.(e);
+    const dist = pointerDownPos
+      ? Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y)
+      : 0;
+    const wasClick = pointerDownPos !== null && dist <= DRAG_THRESHOLD_PX;
+    const ray = pointerDownRay || getRay(e);
+
+    pointerDownPos = null;
+    pointerDownRay = null;
+    isDragCamera = false;
+
+    tool?.onPointerUp?.(e, ray, wasClick);
   }
 
   canvas.addEventListener('pointerdown', onPointerDown);
