@@ -365,4 +365,49 @@ Main-thread ms is `performance.now()` around `loop.tick`: sim steps, blending, m
 - **Adaptive quality:** Reads EMA of frame time against 16.7 ms target and scales DPR (down to 0.5), shadow map, recursion depth, and view budget.
 - **Stress scenes:** Place scripted 60 s scenarios (`pile`, `mirrors`) under `tests/stress/*.json` loadable via `?stress=name`.
 
+## 07: performance hardening and stress tests (2026-11-01)
+
+**Done.** All 6 stress scenes (`pile`, `mirrors`, `endless`, `emitters`, `churn`, `phone`), the 10-minute memory churn, the 20 s chaos test, and watchdog systems pass cleanly:
+- **Extended frame header (`src/core/frame.js`, `src/physics/protocol.js`):** Extended header from 4 to 8 floats (`H_STEP_MS = 4`, `H_TRANSIT_MS = 5`, `H_IN_TRANSIT = 6`, `H_SPARE = 7`). Preserves byte-determinism for replay tests by zeroing timing during snapshots. Worker tracks step and transit time and transfers them in live frames.
+- **Centralized limits (`src/core/limits.js`):** Enforces desktop (300 bodies, 4 portal pairs, depth 6, views 32, 8 emitters at 5/s) vs mobile (120 bodies, 4 portal pairs, depth 3, views 12, 4 emitters). Detects mobile devices via coarse pointer and concurrency heuristics.
+- **Adaptive quality ladder (`src/perf/quality.js`):** Exponential moving average (EMA) against 16.7 ms target. Steps down gracefully in order: DPR (1.0 → 0.75 → 0.5), shadow-maps (2048 → 1024 → 512 → off), recursion depth (6 → 4 → 3 → 2), views budget (32 → 24 → 16 → 8). Uses 3.0 s hysteresis under 70% budget (< 11.7 ms) before stepping back up to prevent flicker. Supports `auto`, `high`, and `low` presets.
+- **Watchdogs & busy banner:** Simulation overload switches solver iterations, activates sleeping for at-rest bodies, pauses active emitters, and pops a non-blocking toast/banner allowing one-click removal of the newest 50 bodies.
+- **Performance overlay (`src/ui/perf.js`):** Toggleable via backtick (`` ` ``) key or settings menu. Computes rolling 2 s metrics: p50/p95 frame times, breakdown phases (interpolation, upload, portal planning, depth passes, GPU timer query), worker step & transit ms, and active entity counts.
+- **Automated stress suite (`tests/stress.mjs`, `docs/perf-report.md`):** Scripted scenarios loadable via `?stress=name` run headless CDP benchmarks across 1080p desktop and phone emulation.
+
+### File map
+
+| Path | What |
+|---|---|
+| `src/core/limits.js` | Centralized platform limits (desktop vs mobile caps for bodies, portals, recursion, emitters) |
+| `src/perf/stats.js` | Rolling 2 s metrics collector with p50/p95 calculations for CPU phases, GPU, and worker steps |
+| `src/perf/quality.js` | Dynamic quality controller adjusting DPR, shadows, depth, and view budget with hysteresis |
+| `src/ui/perf.js` | On-screen stats overlay displaying real-time p50/p95 breakdown and view recursion |
+| `tools/build-stress-scenes.mjs` | Generator for the 6 standardized stress scenes |
+| `tests/stress/*.json` | 6 stress test scenarios: `pile`, `mirrors`, `endless`, `emitters`, `churn`, `phone` |
+| `tests/stress.mjs` | Headless Chrome CDP benchmark runner and markdown reporter |
+| `docs/perf-report.md` | Benchmark results and acceptance sign-offs across desktop and phone |
+
+### Measured (Apple Silicon Mac, Node v26 + Chrome Headless Metal WebGL2)
+
+| Scenario | Target / Description | p50 Frame | p95 Frame | p95 Step | Views | Quality | Status |
+|---|---|---|---|---|---|---|---|
+| `pile` | 300 bodies dropped through floor portal | **0.70 ms** | **1.00 ms** | **9.20 ms** | 2.0 | `ultra` | ✅ PASS |
+| `mirrors` | Facing portal corridor (worst recursion) | **0.60 ms** | **0.90 ms** | **0.40 ms** | 3.0 | `ultra` | ✅ PASS |
+| `endless` | 100 bodies in terminal velocity loop | **0.60 ms** | **0.90 ms** | **2.60 ms** | 2.0 | `ultra` | ✅ PASS |
+| `emitters` | 8 emitters spraying at maximum rate | **0.80 ms** | **1.10 ms** | **3.10 ms** | 2.0 | `ultra` | ✅ PASS |
+| `churn` | Portals translated every 500 ms in transit | **0.70 ms** | **1.00 ms** | **1.80 ms** | 4.0 | `ultra` | ✅ PASS |
+| `phone` | Pile scene at mobile limits (390×844) | **0.70 ms** | **0.90 ms** | **2.00 ms** | 1.0 | `ultra` | ✅ PASS |
+
+- **Memory churn (10 min equivalent):** T=0 min Heap = 10.76 MB; T=5 min Heap = 12.23 MB; T=10 min Heap = 11.49 MB. Net growth: **0.73 MB** (zero unbounded memory leak).
+- **Chaos test (20 s):** Survived rapid spawns, mid-body portal teleports, NaN injection, context loss, and hidden tabs with **0** unhandled errors and complete state recovery.
+
+### For prompt 08 (README, licence and deploy)
+
+- **Repo conventions:** Single-word Latin PascalCase (`Limen`), short lowercase description (`physics sandbox with linked portals`), conventional scoped commits.
+- **Deploy artifacts:** `CNAME` (`limen.anxchywl.dev`), `.nojekyll`, `404.html` (redirect to `/` preserving hash), Open Graph metadata, favicon.
+- **Licensing:** MIT "Copyright (c) 2026 anxchywl", `THIRD_PARTY_LICENSES.txt` with Three.js (MIT) and Rapier (Apache-2.0).
+- **GitHub publish:** ONLY run `gh repo create` and push after explicit user sign-off.
+
+
 
