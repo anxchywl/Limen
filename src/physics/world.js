@@ -4,7 +4,7 @@
 // depenetration frequency cap, NaN and step-time watchdogs), and supports exact snapshot reset.
 
 import {
-  H_COUNT, H_SLOTS, H_STEP, H_TIME, POS, QUAT,
+  H_COUNT, H_IN_TRANSIT, H_SLOTS, H_STEP, H_STEP_MS, H_TIME, H_TRANSIT_MS, POS, QUAT,
   createSlotMap, slotOffset,
 } from './protocol.js';
 import {CG_DYN_FREE, CG_STATIC, createPortalTransit} from './transit.js';
@@ -78,6 +78,8 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
   let busyCount = 0;
   let busyLatched = false;
   let lastStepMs = 0;
+  let lastTransitMs = 0;
+  let lastInTransit = 0;
   let snap = null;
   let dirtyEdit = false;
 
@@ -508,18 +510,32 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
       if (wantCcd !== rb.isCcdEnabled()) rb.enableCcd(wantCcd);
     }
 
-    transit.beforeStep(entries, DT);
-    for (let i = 0; i < entries.length; i++) {
-      const e = entries[i];
-      if (transit.bodyPortalSet.size > 0 && e.collider.activeHooks() !== 0 && !e.rb.isCcdEnabled()) {
-        e.rb.enableCcd(true);
+    if (transit.portals.length > 0) {
+      const tTransit0 = now();
+      transit.beforeStep(entries, DT);
+      if (transit.bodyPortalSet.size > 0) {
+        for (let i = 0; i < entries.length; i++) {
+          const e = entries[i];
+          if (e.collider.activeHooks() !== 0 && !e.rb.isCcdEnabled()) {
+            e.rb.enableCcd(true);
+          }
+        }
       }
+      world.step(eventQueue, transit.hooks);
+      eventQueue.clear();
+      steps++;
+      const tTransit1 = now();
+      transit.afterStep(entries, steps, settings, blocks);
+      const tTransit2 = now();
+      lastTransitMs = (tTransit1 - tTransit0) + (tTransit2 - tTransit1);
+      lastInTransit = transit.activeCount;
+    } else {
+      world.step(eventQueue);
+      eventQueue.clear();
+      steps++;
+      lastTransitMs = 0;
+      lastInTransit = 0;
     }
-    // Rapier 0.21 only forwards physics hooks into WASM when an EventQueue is passed as arg 1
-    world.step(eventQueue, transit.hooks);
-    eventQueue.clear();
-    steps++;
-    transit.afterStep(entries, steps, settings, blocks);
 
     // post-step: catch solver NaNs and cap post-impact / depenetration speeds before writing frames
     for (let i = entries.length - 1; i >= 0; i--) {
@@ -548,11 +564,27 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
       busyCount++;
       if (busyCount >= BUSY_STREAK && !busyLatched) {
         busyLatched = true;
+        if (world) world.integrationParameters.numSolverIterations = 2;
         emit({type: 'busy', stepMs: lastStepMs, streak: busyCount});
+      }
+      if (busyLatched) {
+        // Alleviate overload: put resting bodies with negligible motion to sleep
+        for (let i = 0; i < entries.length; i++) {
+          const rb = entries[i].rb;
+          if (rb.isDynamic() && !rb.isSleeping()) {
+            const v = rb.linvel(), av = rb.angvel();
+            if (Math.hypot(v.x, v.y, v.z) < 0.1 && Math.hypot(av.x, av.y, av.z) < 0.2) {
+              rb.sleep();
+            }
+          }
+        }
       }
     } else {
       busyCount = 0;
-      busyLatched = false;
+      if (busyLatched) {
+        busyLatched = false;
+        if (world) world.integrationParameters.numSolverIterations = 4;
+      }
     }
     return lastStepMs;
   }
@@ -564,12 +596,30 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
     return total;
   }
 
-  function write(buf, sinceStep) {
+  function removeNewest(n = 50) {
+    const toRemove = Math.min(n, entries.length);
+    const removed = [];
+    for (let i = 0; i < toRemove; i++) {
+      const last = entries[entries.length - 1];
+      if (last) {
+        removed.push(last.id);
+        remove(last.id);
+      }
+    }
+    return removed;
+  }
+
+  function write(buf, sinceStep, includeTiming = false) {
     buf.fill(0);
     buf[H_STEP] = steps;
     buf[H_TIME] = steps * DT;
     buf[H_COUNT] = slots.count;
     buf[H_SLOTS] = slots.span;
+    if (includeTiming) {
+      buf[H_STEP_MS] = lastStepMs;
+      buf[H_TRANSIT_MS] = lastTransitMs;
+      buf[H_IN_TRANSIT] = lastInTransit;
+    }
     for (let i = 0; i < entries.length; i++) {
       const e = entries[i];
       const o = slotOffset(e.slot);
@@ -583,7 +633,7 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
   }
 
   return {
-    load, spawn, remove, edit, setPortals, setSettings, saveSnapshot, reset, step, write, injectNaN,
+    load, spawn, remove, removeNewest, edit, setPortals, setSettings, saveSnapshot, reset, step, write, injectNaN,
     snapshotBytes: () => world?.takeSnapshot() ?? new Uint8Array(0),
     get world() { return world; },
     get transit() { return transit; },
@@ -595,9 +645,11 @@ export function createPhysicsWorld(RAPIER, {onEvent, now = () => performance.now
     get settings() { return settings; },
     get entries() { return entries; },
     get lastStepMs() { return lastStepMs; },
+    get lastTransitMs() { return lastTransitMs; },
     get lastHookMs() { return transit.lastHookMs; },
     get teleportCount() { return transit.teleportCount; },
     get activeTransitCount() { return transit.activeCount; },
+    get inTransitCount() { return lastInTransit; },
     get dirtyEdit() { return dirtyEdit; },
     dispose() { eventQueue.free(); if (world) { world.free(); world = null; } },
   };

@@ -4,9 +4,7 @@
 
 import * as THREE from 'three';
 import {addEmitter, newId} from '../../core/scene.js';
-
-const MAX_EMITTERS = 8;
-const MAX_BODIES = 300;
+import {canAddEmitter, canAddBody, getLimits} from '../../core/limits.js';
 
 export function createEmitterTool({doc, view, sim, history, setNotice}) {
   let shape = 'ball'; // 'ball' | 'box' | 'capsule' | 'plank' | 'heavy_ball'
@@ -81,8 +79,9 @@ export function createEmitterTool({doc, view, sim, history, setNotice}) {
   function onPointerDown(e, ray) {
     if (e.button !== 0) return;
     doc.emitters ??= [];
-    if (doc.emitters.length >= MAX_EMITTERS) {
-      setNotice?.(`emitter limit reached (${MAX_EMITTERS})`);
+    const chk = canAddEmitter(doc);
+    if (!chk.ok) {
+      setNotice?.(chk.reason);
       return;
     }
 
@@ -133,13 +132,14 @@ export function createEmitterTool({doc, view, sim, history, setNotice}) {
 
   // Tick active emitters in Play mode
   function tick(simTime) {
-    if (!sim.playing) return;
+    if (!sim.playing || sim.busy) return; // Pause emitters when simulation is busy or paused
     if (!doc.emitters || doc.emitters.length === 0) return;
 
+    const maxBodies = getLimits().maxBodies;
     for (const e of doc.emitters) {
       const interval = 1 / Math.min(5, Math.max(0.2, e.rate ?? 2));
       if (simTime - (e.lastSpawn ?? 0) >= interval) {
-        if (sim.count >= MAX_BODIES) continue; // body cap check
+        if (sim.count >= maxBodies) continue; // body cap check
 
         // Direction from emitter quaternion
         const q = new THREE.Quaternion(e.quat[0], e.quat[1], e.quat[2], e.quat[3]);

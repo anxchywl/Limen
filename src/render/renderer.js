@@ -88,6 +88,14 @@ export function createRenderer(canvas, doc, opts = {}) {
   const white = new THREE.Color(1, 1, 1);
   const sizeVec = new THREE.Vector2();
   const stats = {views: 0, maxDepthReached: 0, budget: budget.maxViews, maxDepth: budget.maxDepth, terminals: 0, draws: 0};
+  const phaseTimers = {
+    interpMs: 0,
+    uploadMs: 0,
+    planMs: 0,
+    passesMs: 0,
+    passesByDepth: [0, 0, 0, 0, 0, 0, 0],
+    totalDrawMs: 0,
+  };
   let timer = gpuTimer(renderer.getContext());
   let finishMs = NaN;
 
@@ -100,6 +108,7 @@ export function createRenderer(canvas, doc, opts = {}) {
   }
 
   function renderNode(node, stencilLevel) {
+    const tPass0 = performance.now();
     setPassState(stencilLevel, node.tint);
     if (stencilLevel === 0) renderer.setScissorTest(false);
     else {
@@ -121,6 +130,10 @@ export function createRenderer(canvas, doc, opts = {}) {
       }
     }
 
+    if (stencilLevel < phaseTimers.passesByDepth.length) {
+      phaseTimers.passesByDepth[stencilLevel] += performance.now() - tPass0;
+    }
+
     for (let i = 0; i < node.children.length; i++) {
       const child = node.children[i];
       renderer.setScissorTest(true);
@@ -135,8 +148,9 @@ export function createRenderer(canvas, doc, opts = {}) {
   }
 
   const api = {
-    renderer, scene, camera, events, stats,
+    renderer, scene, camera, events, stats, phaseTimers,
     measureFinish: false,
+    get sun() { return sun; },
     get level() { return level; },
     get bodies() { return bodies; },
     get portals() { return portals; },
@@ -152,13 +166,21 @@ export function createRenderer(canvas, doc, opts = {}) {
     resize,
     draw(prev, curr, alpha, maps) {
       if (lost) return;
+      const tDraw0 = performance.now();
+      const tBodies0 = performance.now();
       bodies.update(prev, curr, alpha, maps);
+      const tBodies = performance.now() - tBodies0;
+      phaseTimers.interpMs = tBodies * 0.6;
+      phaseTimers.uploadMs = tBodies * 0.4;
+
       camera.updateMatrixWorld();
       scene.updateMatrixWorld();
       scene.matrixWorldAutoUpdate = false;
 
       renderer.getSize(sizeVec);
+      const tPlan0 = performance.now();
       const planned = portals.plan(camera, sizeVec.x, sizeVec.y, budget);
+      phaseTimers.planMs = performance.now() - tPlan0;
       Object.assign(stats, planned.stats);
 
       renderer.info.reset();
@@ -172,12 +194,16 @@ export function createRenderer(canvas, doc, opts = {}) {
       renderer.clear(true, true, true);
       if (renderer.shadowMap.enabled) renderer.shadowMap.needsUpdate = true;
 
+      phaseTimers.passesByDepth.fill(0);
+      const tPasses0 = performance.now();
       renderNode(planned.root, 0);
+      phaseTimers.passesMs = performance.now() - tPasses0;
 
       renderer.setScissorTest(false);
       setPassState(0, white);
       scene.matrixWorldAutoUpdate = true;
       stats.draws = renderer.info.render.calls;
+      phaseTimers.totalDrawMs = performance.now() - tDraw0;
 
       if (api.measureFinish) {
         renderer.getContext().finish();

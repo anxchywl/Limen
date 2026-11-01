@@ -49,7 +49,7 @@ function postFrame({force = false} = {}) {
   const want = targetFloatLength(sim.slots);
   if (buf.length !== want) buf = new Float32Array(want);
   const since = sim.steps > lastPostedStep ? lastPostedStep : undefined;
-  sim.write(buf, since);
+  sim.write(buf, since, true);
   lastPostedStep = sim.steps;
   self.postMessage({type: FROM_WORKER.FRAME, buffer: buf}, [buf.buffer]);
   return true;
@@ -179,6 +179,13 @@ function handleMessage(msg) {
       if (!playing) {
         sim.step(1);
         hasSteppedSinceSnap = true;
+        postFrame({force: true});
+      }
+      break;
+    }
+    case TO_WORKER.REMOVE_NEWEST: {
+      if (sim) {
+        sim.removeNewest(msg.count ?? 50);
         postFrame({force: true});
       }
       break;

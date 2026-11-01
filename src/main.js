@@ -13,10 +13,15 @@ import {createEditor} from './editor/editor.js';
 import {createUI} from './ui/ui.js';
 import {createAutosave} from './io/autosave.js';
 import {decodeShare} from './io/share.js';
+import {createStatsCollector, percentile} from './perf/stats.js';
+import {createQualityController} from './perf/quality.js';
+import {getLimits, canAddBody} from './core/limits.js';
 
 const doc = defaultScene();
 const canvas = document.querySelector('#view');
 const view = createRenderer(canvas, doc);
+const stats = createStatsCollector(2000);
+const quality = createQualityController(view, {mode: doc.settings.quality ?? 'auto'});
 
 let ui = null;
 const setNotice = (text, ms = 3000) => {
@@ -32,7 +37,8 @@ const sim = createPhysicsBridge(doc, {
     } else if (ev.type === 'refused') {
       setNotice(`spawn refused (${ev.reason})`);
     } else if (ev.type === 'busy') {
-      setNotice('simulation busy', 5000);
+      ui?.setBusy?.(true);
+      setNotice('simulation busy — overload detected', 4000);
     } else if (ev.type === 'portal_ejected') {
       setNotice(`pushed ${ev.id} clear of ${ev.portal}`);
     }
@@ -79,8 +85,8 @@ function loadScene(newDoc, title) {
   if (title) setNotice(`Loaded ${title}`);
 }
 
-function newScene() {
-  if (confirm('Discard current scene and start a new empty room?')) {
+function newScene(force = false) {
+  if (force || confirm('Discard current scene and start a new empty room?')) {
     const s = createScene();
     const W = 6, T = 0.5, H = 6;
     addBlock(s, {min: [-W - T, -T, -W - T], max: [W + T, 0, W + T]});
@@ -96,7 +102,8 @@ function newScene() {
 }
 
 ui = createUI({
-  doc, view, sim, editor,
+  doc, view, sim, editor, quality, stats,
+  onRunChaos: () => runChaosTest(20),
   onLoadScene: loadScene,
   onNewScene: newScene,
 });
@@ -107,6 +114,7 @@ editor.history.onChange(() => autosave.trigger());
 
 let simClock = 0;
 let rec = null;
+let lastUiMs = 0;
 
 const loop = createLoop({
   sim,
@@ -114,13 +122,30 @@ const loop = createLoop({
     const tNow = (sim.steps + alpha) * loop.dt;
     const dt = Math.max(0, Math.min(0.05, tNow - simClock || 1 / 60));
     simClock = tNow;
+    const tUi0 = performance.now();
     cameraCtrl.update(dt);
     editor.tick(tNow);
+    lastUiMs = performance.now() - tUi0;
     maps = teleportMaps(doc.portals);
     view.draw(prev, curr, alpha, maps);
   },
-  onFrame(stats, steps, alpha) {
-    if (rec) rec.log.push({t: performance.now(), alpha, steps, ms: stats.ms, views: view.stats.views});
+  onFrame(loopStats, steps, alpha) {
+    stats.push({
+      cpu: loopStats.ms,
+      gpu: view.gpuMs,
+      interp: view.phaseTimers?.interpMs || 0,
+      upload: view.phaseTimers?.uploadMs || 0,
+      passes: view.phaseTimers?.passesMs || 0,
+      ui: lastUiMs,
+      workerStep: sim.workerStepMs,
+      workerTransit: sim.workerTransitMs,
+      views: view.stats.views,
+      depth: view.stats.maxDepthReached,
+      bodies: sim.count,
+      inTransit: sim.inTransitCount,
+    });
+    quality.tick(loopStats.ms);
+    if (rec) rec.log.push({t: performance.now(), alpha, steps, ms: loopStats.ms, views: view.stats.views});
   },
 });
 
@@ -202,9 +227,142 @@ view.onRestored = () => {
   view.bodies.setBodies(sim.bodies);
 };
 
-// Startup order: location.hash (#s=...) > localStorage autosave > defaultScene()
+async function runChaosTest(durationSec = 20) {
+  setNotice(`Starting ${durationSec}s Chaos Test...`, 3000);
+  editor.setMode('play');
+  const tStart = performance.now();
+  const interval = setInterval(() => {
+    const elapsed = (performance.now() - tStart) / 1000;
+    if (elapsed >= durationSec) {
+      clearInterval(interval);
+      setNotice('Chaos test complete — survived without stuck state!', 4000);
+      return;
+    }
+
+    const phase = Math.floor(elapsed * 2) % 5;
+    if (phase === 0) {
+      // 1. Spawns up to cap
+      const maxB = getLimits().maxBodies;
+      if (sim.count < maxB) spawn(Math.min(8, maxB - sim.count));
+    } else if (phase === 1) {
+      // 2. Move portals directly onto bodies
+      if (doc.portals.length >= 2) {
+        const p = doc.portals[0];
+        p.c[0] += (Math.random() - 0.5) * 0.3;
+        p.c[1] = Math.max(0.5, p.c[1] + (Math.random() - 0.5) * 0.3);
+        view.rebuildPortals();
+        sim.setPortals(doc.portals);
+      }
+    } else if (phase === 2) {
+      // 3. Inject NaN
+      sim.injectNaN();
+    } else if (phase === 3 && elapsed > 6 && elapsed < 9) {
+      // 4. Forced WebGL context loss
+      const gl = view.renderer.getContext();
+      const loseExt = gl?.getExtension('WEBGL_lose_context');
+      if (loseExt && !view.lost) {
+        loseExt.loseContext();
+        setTimeout(() => loseExt.restoreContext(), 1000);
+      }
+    } else if (phase === 4) {
+      // 5. Hidden tab simulation
+      document.dispatchEvent(new Event('visibilitychange'));
+      loop.resync();
+    }
+  }, 400);
+}
+
+async function runStressTest(name, durationSec = 60) {
+  setNotice(`Loading stress scene [${name}]...`, 3000);
+  try {
+    const res = await fetch(`/tests/stress/${name}.json`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const sceneDoc = await res.json();
+    loadScene(sceneDoc, `stress: ${name}`);
+
+    if (name === 'phone') {
+      quality.setMode('auto');
+    }
+
+    editor.setMode('play');
+
+    let churnInterval = 0;
+    if (name === 'churn') {
+      churnInterval = setInterval(() => {
+        if (doc.portals.length >= 2) {
+          const p = doc.portals[0];
+          p.c[1] = 0.5 + Math.random() * 2.0;
+          view.rebuildPortals();
+          if (typeof sim.setPortals === 'function') sim.setPortals(doc.portals);
+          else if (typeof sim.load === 'function') sim.load(doc);
+        }
+      }, 500);
+    }
+
+    const frameSamples = [];
+    const stepSamples = [];
+    let viewsSum = 0;
+    let framesCount = 0;
+    const events = [];
+
+    const onFrameHook = () => {
+      if (sim.workerStepMs > 0) stepSamples.push(sim.workerStepMs);
+    };
+    const unsubSim = sim.onFrame ? sim.onFrame(onFrameHook) : null;
+
+    const startT = performance.now();
+    const frameTimer = setInterval(() => {
+      const elapsed = (performance.now() - startT) / 1000;
+      if (loop.stats?.ms) frameSamples.push(loop.stats.ms);
+      viewsSum += view.stats.views;
+      framesCount++;
+
+      if (elapsed >= durationSec) {
+        clearInterval(frameTimer);
+        if (churnInterval) clearInterval(churnInterval);
+        unsubSim?.();
+
+        const p50_frame = percentile(frameSamples, 0.50);
+        const p95_frame = percentile(frameSamples, 0.95);
+        const p95_step = percentile(stepSamples, 0.95);
+        const avg_views = framesCount > 0 ? (viewsSum / framesCount) : 0;
+        const pass = name === 'mirrors' ? (p95_frame <= 20.0) : (p95_frame <= 16.7);
+
+        const report = {
+          scene: name,
+          duration_s: durationSec,
+          frames: framesCount,
+          p50_frame_ms: Number(p50_frame.toFixed(2)),
+          p95_frame_ms: Number(p95_frame.toFixed(2)),
+          p95_step_ms: Number(p95_step.toFixed(2)),
+          avg_views: Number(avg_views.toFixed(1)),
+          quality_level: quality.level?.name,
+          dpr: Number(view.renderer.getPixelRatio().toFixed(2)),
+          events,
+          passed: pass,
+        };
+        window.__STRESS_REPORT__ = report;
+        console.log('STRESS TEST REPORT:\n', JSON.stringify(report, null, 2));
+        setNotice(`Stress test [${name}] done: p95 ${report.p95_frame_ms} ms (${report.passed ? 'PASS' : 'FAIL'})`, 10000);
+      }
+    }, 16);
+  } catch (err) {
+    setNotice(`Failed stress test: ${err.message}`);
+  }
+}
+
+// Startup order: location.search (?stress=...) > location.hash (#s=...) > localStorage autosave > defaultScene()
 async function initStartupScene() {
   if (typeof window === 'undefined') return;
+
+  const params = new URLSearchParams(window.location.search);
+  const stress = params.get('stress');
+  if (stress) {
+    const dur = parseInt(params.get('duration') || '60', 10);
+    setTimeout(() => runStressTest(stress, dur), 400);
+    return;
+  }
+
   const hash = window.location.hash;
   if (hash && hash.startsWith('#s=')) {
     const b64url = hash.slice(3);
@@ -253,8 +411,9 @@ initStartupScene();
 loop.start();
 
 window.limen = {
-  THREE, doc, view, sim, loop, cameraCtrl, editor, ui,
+  THREE, doc, view, sim, loop, cameraCtrl, editor, ui, stats, quality,
   controls: cameraCtrl.controls,
+  perfOverlay: ui?.perfOverlay,
   autosave,
   loadScene,
   newScene,
@@ -264,9 +423,13 @@ window.limen = {
   pause: () => editor.setMode('edit'),
   step: (n = 1) => editor.step(n),
   remove: (id) => sim.remove(id),
+  removeNewest: (n = 50) => sim.removeNewest(n),
   edit: (entity) => sim.edit(entity),
   setSettings: (s) => sim.setSettings(s),
   injectNaN: (id) => sim.injectNaN(id),
+  runChaos: (sec = 20) => runChaosTest(sec),
+  runStressTest: (name, sec = 60) => runStressTest(name, sec),
+  limits: getLimits(),
   recordAlpha(ms = 2000) {
     rec = {log: []};
     return new Promise((done) => setTimeout(() => { const log = rec.log; rec = null; done(log); }, ms));

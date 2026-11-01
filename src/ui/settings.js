@@ -1,7 +1,7 @@
 // Settings modal panel: gravity (on, off, low), terminal speed,
 // quality (auto, high, low), recursion depth slider (1–8), and trails on/off.
 
-export function createSettingsModal({container, doc, view, sim}) {
+export function createSettingsModal({container, doc, view, sim, quality, perfOverlay, onRunChaos}) {
   const modal = document.createElement('div');
   modal.className = 'limen-modal';
   modal.style.display = 'none';
@@ -48,6 +48,14 @@ export function createSettingsModal({container, doc, view, sim}) {
           <label class="setting-label">Motion Trails:</label>
           <input type="checkbox" id="trails-check" ${doc.settings.trails ? 'checked' : ''}>
         </div>
+
+        <div class="setting-row" style="margin-top: 14px; border-top: 1px solid var(--paper-border); padding-top: 12px;">
+          <label class="setting-label">Diagnostics:</label>
+          <div style="display: flex; gap: 8px;">
+            <button id="toggle-perf-btn" class="btn btn-secondary">Stats Overlay (\`)</button>
+            <button id="chaos-btn" class="btn btn-danger">Chaos Test</button>
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -61,6 +69,18 @@ export function createSettingsModal({container, doc, view, sim}) {
   const depthSlider = modal.querySelector('#depth-slider');
   const depthVal = modal.querySelector('#depth-val');
   const trailsCheck = modal.querySelector('#trails-check');
+  const togglePerfBtn = modal.querySelector('#toggle-perf-btn');
+  const chaosBtn = modal.querySelector('#chaos-btn');
+
+  togglePerfBtn.onclick = () => {
+    perfOverlay?.toggle();
+    close();
+  };
+
+  chaosBtn.onclick = () => {
+    close();
+    onRunChaos?.();
+  };
 
   function open() {
     updateUI();
@@ -112,6 +132,7 @@ export function createSettingsModal({container, doc, view, sim}) {
     b.onclick = () => {
       const q = b.dataset.qual;
       doc.settings.quality = q;
+      quality?.setMode(q);
       sim.setSettings({quality: q});
       updateUI();
     };

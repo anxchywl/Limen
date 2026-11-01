@@ -3,7 +3,7 @@
 // straight back to the worker after copying, and samples an interpolated pose one step behind worker time.
 
 import {
-  ALIVE, FLAGS, FROM_WORKER, H_COUNT, H_SLOTS, H_STEP, H_TIME, POS, QUAT,
+  ALIVE, FLAGS, FROM_WORKER, H_COUNT, H_IN_TRANSIT, H_SLOTS, H_STEP, H_STEP_MS, H_TIME, H_TRANSIT_MS, POS, QUAT,
   TO_WORKER, frameLength, slotOffset,
 } from './protocol.js';
 import {DT} from './world.js';
@@ -217,6 +217,22 @@ export function createPhysicsBridge(doc, {autoplay = true, onBodiesChanged, onEv
     worker.postMessage({type: TO_WORKER.INJECT_NAN, id});
   }
 
+  function removeNewest(count = 50) {
+    worker.postMessage({type: TO_WORKER.REMOVE_NEWEST, count});
+    const liveIndices = [];
+    for (let i = 0; i < slotBodies.length; i++) {
+      if (slotBodies[i] && !slotBodies[i]._dead) liveIndices.push(i);
+    }
+    const toRemove = Math.min(count, liveIndices.length);
+    for (let i = 0; i < toRemove; i++) {
+      const idx = liveIndices[liveIndices.length - 1 - i];
+      slotBodies[idx] = {...deadPlaceholder(idx), _dead: true};
+    }
+    syncDocBodies();
+    bodiesDirty = true;
+    busy = false;
+  }
+
   function write(buf) {
     buf.set(curr.subarray(0, Math.min(buf.length, curr.length)));
   }
@@ -225,7 +241,7 @@ export function createPhysicsBridge(doc, {autoplay = true, onBodiesChanged, onEv
 
   return {
     ready,
-    sample, write, step, add: spawn, spawn, remove, edit, play, pause, reset, setSettings, injectNaN, load,
+    sample, write, step, add: spawn, spawn, remove, removeNewest, edit, play, pause, reset, setSettings, injectNaN, load,
     resync() { primed = false; renderTime = curr[H_TIME]; },
     onFrame(fn) { frameListeners.add(fn); return () => frameListeners.delete(fn); },
     dispose() { frameListeners.clear(); worker.terminate(); },
@@ -241,5 +257,8 @@ export function createPhysicsBridge(doc, {autoplay = true, onBodiesChanged, onEv
     get prev() { return prev; },
     get curr() { return curr; },
     get bodies() { return slotBodies; },
+    get workerStepMs() { return curr[H_STEP_MS] || 0; },
+    get workerTransitMs() { return curr[H_TRANSIT_MS] || 0; },
+    get inTransitCount() { return curr[H_IN_TRANSIT] | 0; },
   };
 }

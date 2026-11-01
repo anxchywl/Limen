@@ -14,6 +14,24 @@
       }
     }
   </script>
+  <script>
+    function reportError(msg) {
+      console.error(msg);
+      const el = document.createElement('div');
+      el.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#d32f2f;color:#fff;padding:16px;font:14px/1.4 monospace;z-index:999999;white-space:pre-wrap;box-shadow:0 4px 12px rgba(0,0,0,0.5);';
+      el.textContent = 'Limen Error:\n' + msg;
+      document.body.appendChild(el);
+      try {
+        fetch('/api/error?msg=' + encodeURIComponent(msg));
+      } catch (_) {}
+    }
+    window.addEventListener('error', (e) => {
+      reportError(e.message + '\nat ' + (e.filename || '') + ':' + (e.lineno || '') + ':' + (e.colno || '') + '\n' + (e.error?.stack || ''));
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      reportError('Unhandled Rejection: ' + (e.reason?.stack || e.reason?.message || e.reason));
+    });
+  </script>
 </head>
 <body>
   <canvas id="view"></canvas>

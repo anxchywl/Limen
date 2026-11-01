@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import {dot, sub} from '../core/vec.js';
 import {frame, inside, local, portalMap} from '../core/portal.js';
+import {getLimits} from '../core/limits.js';
 import {PAPER, PORTAL_COLOURS} from './palette.js';
 import {inkMaterial} from './ink.js';
 import {applyObliqueNearPlane} from './oblique.js';
@@ -20,10 +21,10 @@ const PASS_TINT = 0.1;
 const PASS_FADE = 0.94;
 
 export function defaultViewBudget() {
-  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  const lim = getLimits();
   return {
-    maxDepth: coarse ? 3 : 6,
-    maxViews: coarse ? 12 : 32,
+    maxDepth: lim.maxDepth,
+    maxViews: lim.maxViews,
     minArea: 0.002,
   };
 }

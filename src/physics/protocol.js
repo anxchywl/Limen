@@ -1,9 +1,18 @@
 // Shared protocol between the main-thread physics bridge and the Rapier module worker.
 // Re-exports the 16-float frame-buffer layout from core/frame.js so render and physics never drift,
 // defines the worker message types, and provides the deterministic id <-> slot map with free-slot reuse.
+//
+// Frame Header layout (HEADER = 8 floats / 32 bytes):
+//   header[0] H_STEP:       integer step count
+//   header[1] H_TIME:       accumulated physics time (seconds)
+//   header[2] H_COUNT:      live body count
+//   header[3] H_SLOTS:      allocated slot span (0 .. span - 1)
+//   header[4] H_STEP_MS:    worker physics step execution duration in ms
+//   header[5] H_TRANSIT_MS: worker portal transit execution duration in ms
+//   header[6] H_IN_TRANSIT: count of bodies currently in portal transit
+//   header[7] H_SPARE:      reserved spare field
 
 export * from '../core/frame.js';
-export const H_SLOTS = 3; // header[3]: allocated slot span (0 .. span - 1); H_COUNT is live body count
 
 export const TO_WORKER = Object.freeze({
   LOAD: 'load',
@@ -17,6 +26,7 @@ export const TO_WORKER = Object.freeze({
   SET_SETTINGS: 'setSettings',
   RETURN: 'return',
   INJECT_NAN: 'injectNaN',
+  REMOVE_NEWEST: 'removeNewest',
 });
 
 export const FROM_WORKER = Object.freeze({

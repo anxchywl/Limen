@@ -3,11 +3,13 @@
 // Rejects oversized payloads, prototype pollution, malformed JSON, NaN/Infinity,
 // unknown versions, broken ID links, or excessive entity counts.
 
+import {DESKTOP_LIMITS} from '../core/limits.js';
+
 const MAX_PAYLOAD_BYTES = 1024 * 1024; // 1 MB
 const MAX_BLOCKS = 100;
-const MAX_PORTALS = 8;
-const MAX_BODIES = 300;
-const MAX_EMITTERS = 8;
+const MAX_PORTALS = DESKTOP_LIMITS.maxPortals;
+const MAX_BODIES = DESKTOP_LIMITS.maxBodies;
+const MAX_EMITTERS = DESKTOP_LIMITS.maxEmitters;
 const VALID_SHAPES = new Set(['box', 'ball', 'capsule', 'plank']);
 const VALID_BLOCK_KINDS = new Set(['box', 'ramp', 'pillar']);
 

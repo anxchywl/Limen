@@ -6,8 +6,7 @@
 
 import * as THREE from 'three';
 import {newId} from '../../core/scene.js';
-
-const MAX_BODIES = 300;
+import {canAddBody, getLimits} from '../../core/limits.js';
 const SPRAY_INTERVAL_MS = 100; // max 10/s
 
 export function createSpawnTool({doc, view, sim, history, setNotice}) {
@@ -91,8 +90,9 @@ export function createSpawnTool({doc, view, sim, history, setNotice}) {
   }
 
   function spawnOne(ray) {
-    if (sim.count >= MAX_BODIES) {
-      setNotice?.(`body limit reached (${MAX_BODIES})`);
+    const check = canAddBody(doc);
+    if (!check.ok || sim.count >= getLimits().maxBodies) {
+      setNotice?.(check.reason || `body limit reached (${getLimits().maxBodies})`);
       return null;
     }
     const hitPt = raycastSurface(ray);
@@ -115,9 +115,10 @@ export function createSpawnTool({doc, view, sim, history, setNotice}) {
 
     sprayTimer = setInterval(() => {
       if (!spraying || !lastRay) return;
-      if (sim.count >= MAX_BODIES) {
+      const chk = canAddBody(doc);
+      if (!chk.ok || sim.count >= getLimits().maxBodies) {
         clearInterval(sprayTimer);
-        setNotice?.(`body limit reached (${MAX_BODIES})`);
+        setNotice?.(chk.reason || `body limit reached (${getLimits().maxBodies})`);
         return;
       }
       const b = spawnOne(lastRay);

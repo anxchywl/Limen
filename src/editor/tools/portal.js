@@ -9,12 +9,12 @@ import * as THREE from 'three';
 import {add, cross, dot, norm, scale, sub} from '../../core/vec.js';
 import {frame, inside, local} from '../../core/portal.js';
 import {PORTAL_COLOURS, newId} from '../../core/scene.js';
+import {canAddPortalPair, getLimits} from '../../core/limits.js';
 import {blockFaces, faceKey} from '../../render/level.js';
 
 const MIN_GAP = 0.1;
 const DEFAULT_A = 0.7;
 const DEFAULT_B = 1.0;
-const MAX_PAIRS = 4;
 
 export function createPortalTool({doc, view, sim, history, setNotice}) {
   let pendingA = null; // Pending first portal of a pair
@@ -199,9 +199,12 @@ export function createPortalTool({doc, view, sim, history, setNotice}) {
     }
 
     // Check pair limit
-    if (!pendingA && doc.portals.length >= MAX_PAIRS * 2) {
-      setNotice?.(`portal pair limit reached (${MAX_PAIRS} pairs)`);
-      return;
+    if (!pendingA) {
+      const chk = canAddPortalPair(doc);
+      if (!chk.ok) {
+        setNotice?.(chk.reason);
+        return;
+      }
     }
 
     const {u, v, n} = computeFaceAxes(hit.normal, hit.point, view.camera.position);
