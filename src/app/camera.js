@@ -112,6 +112,24 @@ export function createCameraController(threeCamera, canvas, doc) {
     setMode(mode === 'orbit' ? 'fly' : 'orbit');
   }
 
+  function elevate(deltaY) {
+    if (mode === 'orbit') {
+      threeCamera.position.y = Math.max(0.35, Math.min(14, threeCamera.position.y + deltaY));
+      controls.target.y = Math.max(0.2, Math.min(13.8, controls.target.y + deltaY));
+      controls.update();
+    } else if (mode === 'fly' && flyState) {
+      flyState.pos[1] = Math.max(0.35, Math.min(14, flyState.pos[1] + deltaY));
+    }
+  }
+
+  function resetView() {
+    if (mode === 'fly') setMode('orbit');
+    threeCamera.position.fromArray(doc.camera?.pos || [0, 3.8, 6.2]);
+    threeCamera.up.set(0, 1, 0);
+    controls.target.fromArray(doc.camera?.target || [0, 1.8, 0]);
+    controls.update();
+  }
+
   function onPointerMove(e) {
     if (mode !== 'fly' || !flyState) return;
     // Mouse look when in pointer lock or dragging
@@ -275,8 +293,8 @@ export function createCameraController(threeCamera, canvas, doc) {
       if (keysDown.has('KeyS')) step = madd(step, flyState.fwd, -speed);
       if (keysDown.has('KeyD')) step = madd(step, right, speed);
       if (keysDown.has('KeyA')) step = madd(step, right, -speed);
-      if (keysDown.has('KeyE')) step = madd(step, flyState.up, speed);
-      if (keysDown.has('KeyQ')) step = madd(step, flyState.up, -speed);
+      if (keysDown.has('KeyE') || keysDown.has('PageUp') || keysDown.has('Space')) step = madd(step, flyState.up, speed);
+      if (keysDown.has('KeyQ') || keysDown.has('KeyC') || keysDown.has('PageDown')) step = madd(step, flyState.up, -speed);
 
       const nextPos = add(flyState.pos, step);
 
@@ -358,8 +376,8 @@ export function createCameraController(threeCamera, canvas, doc) {
       if (keysDown.has('KeyS') || keysDown.has('ArrowDown')) step = madd(step, fwd, -1);
       if (keysDown.has('KeyD') || keysDown.has('ArrowRight')) step = madd(step, right, 1);
       if (keysDown.has('KeyA') || keysDown.has('ArrowLeft')) step = madd(step, right, -1);
-      if (keysDown.has('KeyE')) step = madd(step, worldUp, 1);
-      if (keysDown.has('KeyQ') || keysDown.has('KeyC')) step = madd(step, worldUp, -1);
+      if (keysDown.has('KeyE') || keysDown.has('PageUp')) step = madd(step, worldUp, 1);
+      if (keysDown.has('KeyQ') || keysDown.has('KeyC') || keysDown.has('PageDown')) step = madd(step, worldUp, -1);
 
       const sLen = Math.hypot(step[0], step[1], step[2]);
       if (sLen > 1e-4) {
@@ -431,6 +449,8 @@ export function createCameraController(threeCamera, canvas, doc) {
     get mode() { return mode; },
     setMode,
     toggleMode,
+    elevate,
+    resetView,
     flyThrough,
     update,
     syncPortals,

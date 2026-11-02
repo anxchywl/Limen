@@ -102,7 +102,7 @@ function newScene(force = false) {
 }
 
 ui = createUI({
-  doc, view, sim, editor, quality, stats,
+  doc, view, sim, editor, quality, stats, cameraCtrl,
   onRunChaos: () => runChaosTest(20),
   onLoadScene: loadScene,
   onNewScene: newScene,

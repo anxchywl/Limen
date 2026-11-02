@@ -1,4 +1,4 @@
-// Keyboard help modal dialog: triggered by ? or Help button.
+// Controls modal dialog: clean, crisp, zero-water shortcut reference.
 
 export function createHelpModal({container}) {
   const modal = document.createElement('div');
@@ -9,31 +9,83 @@ export function createHelpModal({container}) {
     <div class="modal-backdrop"></div>
     <div class="modal-content help-content">
       <div class="modal-header">
-        <h3>Keyboard & Gestures</h3>
-        <button id="help-close" class="btn btn-icon">✕</button>
+        <h3>Controls</h3>
+        <button id="help-close" class="btn btn-icon" title="Close">✕</button>
       </div>
       <div class="modal-body">
-        <table class="help-table">
-          <tr><th>Key</th><th>Action</th></tr>
-          <tr><td><kbd>Space</kbd></td><td>Toggle Edit / Play mode</td></tr>
-          <tr><td><kbd>.</kbd></td><td>Advance 1 physics step while paused</td></tr>
-          <tr><td><kbd>F</kbd></td><td>Toggle Orbit / Fly camera</td></tr>
-          <tr><td><kbd>WASD / QE</kbd></td><td>Fly camera movement (Fly mode)</td></tr>
-          <tr><td><kbd>Shift</kbd></td><td>Fly camera fast speed</td></tr>
-          <tr><td><kbd>1</kbd> – <kbd>6</kbd></td><td>Tools (Select, Block, Portal, Spawn, Emitter, Delete)</td></tr>
-          <tr><td><kbd>Cmd/Ctrl + Z</kbd></td><td>Undo</td></tr>
-          <tr><td><kbd>Cmd/Ctrl + Shift + Z</kbd></td><td>Redo</td></tr>
-          <tr><td><kbd>Backspace</kbd> / <kbd>Del</kbd></td><td>Delete selection</td></tr>
-          <tr><td><kbd>R</kbd></td><td>Reset simulation to edited snapshot</td></tr>
-          <tr><td><kbd>T</kbd></td><td>Cycle time scale (1×, 0.5×, 0.25×)</td></tr>
-          <tr><td><kbd>?</kbd></td><td>Toggle this help overlay</td></tr>
-        </table>
-        <h4 style="margin: 16px 0 8px">Touch Gestures (Phones)</h4>
-        <ul style="padding-left: 20px; margin: 0; line-height: 1.6;">
-          <li><strong>1 finger:</strong> Orbit camera around scene</li>
-          <li><strong>2 fingers:</strong> Pan and pinch-to-zoom</li>
-          <li><strong>Long-press:</strong> Open context menu (Delete / Duplicate)</li>
-        </ul>
+        <div class="help-section">
+          <div class="help-section-title">Navigation & View</div>
+          <div class="help-grid">
+            <div class="help-row">
+              <span class="help-keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span>
+              <span class="help-desc">Move</span>
+            </div>
+            <div class="help-row highlight-row">
+              <span class="help-keys"><kbd>E</kbd> / <kbd>Q</kbd></span>
+              <span class="help-desc"><strong>Go Up / Below</strong></span>
+            </div>
+            <div class="help-row">
+              <span class="help-keys"><kbd>2 Fingers</kbd></span>
+              <span class="help-desc">Orbit camera</span>
+            </div>
+            <div class="help-row">
+              <span class="help-keys"><kbd>Pinch / Scroll</kbd></span>
+              <span class="help-desc">Zoom in & out</span>
+            </div>
+            <div class="help-row">
+              <span class="help-keys"><kbd>Shift</kbd></span>
+              <span class="help-desc">Boost speed</span>
+            </div>
+            <div class="help-row">
+              <span class="help-keys"><kbd>F</kbd></span>
+              <span class="help-desc">Fly mode</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="help-section">
+          <div class="help-section-title">Actions</div>
+          <div class="help-grid">
+            <div class="help-row">
+              <span class="help-keys"><kbd>Space</kbd></span>
+              <span class="help-desc">Play / Pause</span>
+            </div>
+            <div class="help-row">
+              <span class="help-keys"><kbd>.</kbd></span>
+              <span class="help-desc">Advance 1 step</span>
+            </div>
+            <div class="help-row">
+              <span class="help-keys"><kbd>⌘Z</kbd> / <kbd>⇧⌘Z</kbd></span>
+              <span class="help-desc">Undo / Redo</span>
+            </div>
+            <div class="help-row">
+              <span class="help-keys"><kbd>R</kbd></span>
+              <span class="help-desc">Reset scene</span>
+            </div>
+            <div class="help-row">
+              <span class="help-keys"><kbd>Backspace</kbd></span>
+              <span class="help-desc">Delete selected</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="help-section">
+          <div class="help-section-title">Touch Gestures</div>
+          <div class="help-grid">
+            <div class="help-row">
+              <span class="help-keys">1 finger</span>
+              <span class="help-desc">Orbit</span>
+            </div>
+            <div class="help-row">
+              <span class="help-keys">2 fingers</span>
+              <span class="help-desc">Pan & pinch zoom</span>
+            </div>
+            <div class="help-row">
+              <span class="help-keys">Long-press</span>
+              <span class="help-desc">Context menu</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   `;

@@ -241,6 +241,48 @@ html, body {
   z-index: 150;
 }
 
+.dropdown-sep {
+  width: 100%;
+  height: 1px;
+  background: var(--paper-border);
+  margin: 3px 0;
+}
+
+/* Camera Elevation Group */
+.elevation-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: rgba(36, 29, 24, 0.04);
+  padding: 2px 4px;
+  border-radius: 9999px;
+  border: 1px solid var(--paper-border);
+}
+
+.btn-elev {
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  gap: 4px;
+}
+
+.btn-elev:hover:not(:disabled) {
+  background: rgba(36, 29, 24, 0.08);
+  transform: translateY(-1px);
+}
+
+.btn-elev:active:not(:disabled) {
+  transform: translateY(1px);
+  background: rgba(36, 29, 24, 0.14);
+}
+
+.btn-elev .icon {
+  font-size: 9px;
+}
+
 .dropdown-item {
   display: flex;
   align-items: center;
@@ -550,28 +592,80 @@ html, body {
   max-width: 150px;
 }
 
-/* Help table */
-.help-table {
-  width: 100%;
-  border-collapse: collapse;
+/* Help / Controls modal styling */
+.help-content {
+  max-width: 400px;
+}
+
+.help-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.help-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--ink-subtle);
+  margin-bottom: 2px;
+}
+
+.help-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: rgba(36, 29, 24, 0.03);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--paper-border);
+}
+
+.help-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 2px;
   font-size: 12px;
 }
 
-.help-table th, .help-table td {
-  padding: 6px 8px;
-  text-align: left;
-  border-bottom: 1px solid var(--paper-border);
+.help-row.highlight-row {
+  background: rgba(62, 124, 143, 0.1);
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin: 1px 0;
 }
 
-.help-table kbd {
+.help-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.help-keys kbd {
   display: inline-block;
   padding: 2px 6px;
   font-family: var(--font-mono);
   font-size: 11px;
+  font-weight: 600;
   background: var(--paper-surface);
   border: 1px solid var(--paper-border);
   border-radius: 4px;
-  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
+}
+
+.help-desc {
+  font-size: 12px;
+  color: var(--ink-light);
+}
+
+.help-desc strong {
+  color: var(--ink);
 }
 
 /* Toast notices */
@@ -707,6 +801,14 @@ html, body {
   .io-group .btn {
     padding: 4px 8px;
     font-size: 11px;
+  }
+  .elevation-group {
+    padding: 1px 3px;
+    gap: 2px;
+  }
+  .btn-elev {
+    padding: 3px 6px;
+    font-size: 10px;
   }
   .history-group {
     display: none;

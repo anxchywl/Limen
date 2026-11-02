@@ -211,8 +211,9 @@ export function createEditor({doc, view, sim, cameraCtrl, setNotice}) {
       return;
     }
 
-    // Space toggles mode
+    // Space toggles mode (in fly mode, Space flies up)
     if (e.code === 'Space') {
+      if (cameraCtrl.mode === 'fly') return;
       e.preventDefault();
       toggleMode();
       return;

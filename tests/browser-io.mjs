@@ -256,6 +256,7 @@ async function main() {
     cdp.close();
   } finally {
     cleanup();
+    process.exit(0);
   }
 }
 

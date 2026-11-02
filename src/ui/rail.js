@@ -12,35 +12,29 @@ export function createToolRail({container, doc, editor}) {
     <div class="rail-subpanel" id="rail-subpanel"></div>
 
     <div class="rail-tools">
-      <button class="rail-btn" data-tool="select" title="Select & Transform (1)">
+      <button class="rail-btn" data-tool="select" title="Select & Transform">
         <span class="icon">↖</span>
         <span class="text">Select</span>
-        <kbd class="hotkey">1</kbd>
       </button>
-      <button class="rail-btn" data-tool="block" title="Place Static Blocks (2)">
+      <button class="rail-btn" data-tool="block" title="Place Static Blocks">
         <span class="icon">⬚</span>
         <span class="text">Block</span>
-        <kbd class="hotkey">2</kbd>
       </button>
-      <button class="rail-btn" data-tool="portal" title="Place Linked Portals (3)">
+      <button class="rail-btn" data-tool="portal" title="Place Linked Portals">
         <span class="icon portal-swatch">○</span>
         <span class="text">Portal</span>
-        <kbd class="hotkey">3</kbd>
       </button>
-      <button class="rail-btn" data-tool="spawn" title="Spawn Dynamic Bodies (4)">
+      <button class="rail-btn" data-tool="spawn" title="Spawn Dynamic Bodies">
         <span class="icon">✦</span>
         <span class="text">Spawn</span>
-        <kbd class="hotkey">4</kbd>
       </button>
-      <button class="rail-btn" data-tool="emitter" title="Continuous Particle Emitter (5)">
+      <button class="rail-btn" data-tool="emitter" title="Continuous Particle Emitter">
         <span class="icon">⊚</span>
         <span class="text">Emitter</span>
-        <kbd class="hotkey">5</kbd>
       </button>
-      <button class="rail-btn" data-tool="delete" title="Delete Objects (6)">
+      <button class="rail-btn" data-tool="delete" title="Delete Objects">
         <span class="icon">✕</span>
         <span class="text">Delete</span>
-        <kbd class="hotkey">6</kbd>
       </button>
     </div>
   `;

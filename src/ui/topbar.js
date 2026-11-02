@@ -2,7 +2,7 @@
 // time scale, quick actions (Gallery, Share, Reset), body badge, history, and overflow menu.
 
 export function createTopBar({
-  container, doc, sim, editor,
+  container, doc, sim, editor, cameraCtrl,
   onOpenSettings, onOpenHelp, onOpenGallery, onShare, onOpenFile, onSaveFile, onNewScene,
 }) {
   const bar = document.createElement('div');
@@ -28,6 +28,14 @@ export function createTopBar({
     </div>
 
     <div class="topbar-center">
+      <div class="elevation-group" title="Camera elevation (E: Up · Q: Down)">
+        <button id="btn-cam-up" class="btn btn-pill btn-elev" title="Go Up (E)">
+          <span class="icon">▲</span> Up
+        </button>
+        <button id="btn-cam-down" class="btn btn-pill btn-elev" title="Go Below / Down (Q)">
+          <span class="icon">▼</span> Down
+        </button>
+      </div>
       <div class="io-group">
         <button id="btn-gallery" class="btn btn-secondary btn-pill" title="Browse example scenes">
           <span class="icon">✦</span> <span>Gallery</span>
@@ -54,12 +62,14 @@ export function createTopBar({
       <div class="topbar-sep"></div>
 
       <button id="btn-settings" class="btn btn-icon btn-secondary" title="Simulation & Rendering Settings">⚙</button>
-      <button id="btn-help" class="btn btn-icon btn-secondary" title="Keyboard & Controls Help (?)">?</button>
+      <button id="btn-help" class="btn btn-icon btn-secondary" title="Controls (?)">?</button>
 
-      <!-- Overflow dropdown for File operations -->
+      <!-- Overflow dropdown for File operations & view reset -->
       <div class="more-menu-wrapper">
-        <button id="btn-more" class="btn btn-icon btn-secondary" title="More options (File I/O)">•••</button>
+        <button id="btn-more" class="btn btn-icon btn-secondary" title="More options">•••</button>
         <div class="more-menu-dropdown" id="topbar-dropdown" style="display: none;">
+          <button id="btn-reset-cam" class="dropdown-item"><span>🎥 Reset Camera</span></button>
+          <div class="dropdown-sep"></div>
           <button id="btn-new" class="dropdown-item"><span>➕ New Empty Scene</span></button>
           <button id="btn-open" class="dropdown-item"><span>📁 Open Scene File…</span></button>
           <button id="btn-save" class="dropdown-item"><span>💾 Save Scene File</span></button>
@@ -86,6 +96,40 @@ export function createTopBar({
   const btnMore = bar.querySelector('#btn-more');
   const dropdown = bar.querySelector('#topbar-dropdown');
   const scaleBtns = bar.querySelectorAll('[data-scale]');
+  const btnCamUp = bar.querySelector('#btn-cam-up');
+  const btnCamDown = bar.querySelector('#btn-cam-down');
+  const btnResetCam = bar.querySelector('#btn-reset-cam');
+
+  let elevInterval = null;
+  function startElev(dy) {
+    cameraCtrl?.elevate(dy);
+    clearInterval(elevInterval);
+    elevInterval = setInterval(() => cameraCtrl?.elevate(dy * 0.35), 40);
+  }
+  function stopElev() {
+    clearInterval(elevInterval);
+  }
+
+  if (btnCamUp && btnCamDown) {
+    btnCamUp.addEventListener('mousedown', () => startElev(0.6));
+    btnCamUp.addEventListener('mouseup', stopElev);
+    btnCamUp.addEventListener('mouseleave', stopElev);
+    btnCamUp.addEventListener('touchstart', (e) => { e.preventDefault(); startElev(0.6); });
+    btnCamUp.addEventListener('touchend', stopElev);
+
+    btnCamDown.addEventListener('mousedown', () => startElev(-0.6));
+    btnCamDown.addEventListener('mouseup', stopElev);
+    btnCamDown.addEventListener('mouseleave', stopElev);
+    btnCamDown.addEventListener('touchstart', (e) => { e.preventDefault(); startElev(-0.6); });
+    btnCamDown.addEventListener('touchend', stopElev);
+  }
+
+  if (btnResetCam) {
+    btnResetCam.onclick = () => {
+      dropdown.style.display = 'none';
+      cameraCtrl?.resetView();
+    };
+  }
 
   btnMode.onclick = () => editor.toggleMode();
   btnStep.onclick = () => editor.step(1);

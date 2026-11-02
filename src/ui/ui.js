@@ -13,7 +13,7 @@ import {setupDropZone, openFilePicker, saveFile} from '../io/file.js';
 import {copyShareLink} from '../io/share.js';
 
 export function createUI({
-  doc, view, sim, editor, quality, stats,
+  doc, view, sim, editor, quality, stats, cameraCtrl,
   onRunChaos, onLoadScene, onNewScene,
 }) {
   let root = document.querySelector('#limen-ui');
@@ -100,6 +100,7 @@ export function createUI({
     doc,
     sim,
     editor,
+    cameraCtrl,
     onOpenSettings: () => settingsModal.open(),
     onOpenHelp: () => helpModal.open(),
     onOpenGallery: () => galleryModal.open(),
